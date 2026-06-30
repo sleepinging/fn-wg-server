@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"wg-server/api"
 	"wg-server/db"
@@ -16,7 +17,15 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.18"
+const Version = "1.0.19"
+
+func init() {
+	// 统一使用 Asia/Shanghai 时区
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err == nil {
+		time.Local = loc
+	}
+}
 
 func main() {
 	// Determine data directory

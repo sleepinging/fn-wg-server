@@ -217,7 +217,7 @@ func GetLogs(page, pageSize int, level, search string) ([]map[string]interface{}
 			"id":        id,
 			"level":     lvl,
 			"message":   msg,
-			"createdAt": ts,
+			"createdAt": toLocalTime(ts),
 		})
 	}
 	return logs, total, nil
@@ -255,4 +255,34 @@ func CleanBandwidthHistory(days int) error {
 	cutoff := time.Now().AddDate(0, 0, -days)
 	_, err := db.Exec("DELETE FROM bandwidth_history WHERE timestamp < ?", cutoff.Format("2006-01-02 15:04:05"))
 	return err
+}
+
+// toLocalTime 将数据库中的 UTC 时间戳字符串转为 Asia/Shanghai 时区显示。
+// 支持格式: "2006-01-02 15:04:05" (SQLite CURRENT_TIMESTAMP, UTC)
+//           "2006-01-02T15:04:05Z" (ISO 8601 UTC)
+func toLocalTime(ts string) string {
+	if ts == "" {
+		return ts
+	}
+	var t time.Time
+	var err error
+	// 尝试多种格式解析
+	formats := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05",
+		time.RFC3339,
+	}
+	for _, f := range formats {
+		t, err = time.Parse(f, ts)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		// 解析失败，原样返回
+		return ts
+	}
+	// 转换为本地时区 (Asia/Shanghai)
+	return t.In(time.Local).Format("2006-01-02 15:04:05")
 }

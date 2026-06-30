@@ -82,6 +82,7 @@ func GetBandwidthHistory(userID int, startTime, endTime string) ([]BandwidthPoin
 		if err := rows.Scan(&p.Timestamp, &p.RxBytes, &p.TxBytes, &p.RxSpeed, &p.TxSpeed); err != nil {
 			continue
 		}
+		p.Timestamp = toLocalTime(p.Timestamp)
 		points = append(points, p)
 	}
 	return points, nil

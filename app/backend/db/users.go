@@ -64,6 +64,8 @@ func GetUserByID(id int) (*User, error) {
 		}
 		return nil, err
 	}
+	u.CreatedAt = toLocalTime(u.CreatedAt)
+	u.UpdatedAt = toLocalTime(u.UpdatedAt)
 	return u, nil
 }
 
@@ -85,6 +87,8 @@ func GetUserByUsername(username string) (*User, error) {
 		}
 		return nil, err
 	}
+	u.CreatedAt = toLocalTime(u.CreatedAt)
+	u.UpdatedAt = toLocalTime(u.UpdatedAt)
 	return u, nil
 }
 
@@ -109,6 +113,8 @@ func ListUsers() ([]User, error) {
 			&u.Enabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			continue
 		}
+		u.CreatedAt = toLocalTime(u.CreatedAt)
+		u.UpdatedAt = toLocalTime(u.UpdatedAt)
 		users = append(users, u)
 	}
 	return users, nil
@@ -235,8 +241,8 @@ func GetUserHistory(userID int, page, pageSize int) ([]map[string]interface{}, i
 			"username":       uname,
 			"internalIP":     intIP,
 			"externalIP":     extIP,
-			"connectedAt":    connAt,
-			"disconnectedAt": discTime,
+			"connectedAt":    toLocalTime(connAt),
+			"disconnectedAt": toLocalTime(discTime),
 			"rxBytes":        rx,
 			"txBytes":        tx,
 		})
