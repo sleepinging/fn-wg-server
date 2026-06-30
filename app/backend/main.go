@@ -16,7 +16,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.15"
+const Version = "1.0.16"
 
 func main() {
 	// Determine data directory
