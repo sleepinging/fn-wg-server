@@ -164,8 +164,12 @@ func GetSmallestUnusedIP(subnet string) (string, error) {
 	var a, b, c, d int
 	fmt.Sscanf(baseIP, "%d.%d.%d.%d", &a, &b, &c, &d)
 
-	// Start from base IP + 1
-	for i := d + 1; i < 255; i++ {
+	// 从 10 开始分配，保留 .1-.9 给网关和其他用途
+	startIP := d + 1
+	if startIP < 10 {
+		startIP = 10
+	}
+	for i := startIP; i < 255; i++ {
 		candidate := fmt.Sprintf("%d.%d.%d.%d/32", a, b, c, i)
 		if !usedIPs[candidate] {
 			return candidate, nil
