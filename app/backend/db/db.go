@@ -167,27 +167,35 @@ func Log(level, message string) {
 	db.Exec("DELETE FROM system_log WHERE id NOT IN (SELECT id FROM system_log ORDER BY id DESC LIMIT 10000)")
 }
 
-// GetLogs retrieves logs with pagination.
-func GetLogs(page, pageSize int, level string) ([]map[string]interface{}, int, error) {
+// GetLogs retrieves logs with pagination, level filter, and search.
+func GetLogs(page, pageSize int, level, search string) ([]map[string]interface{}, int, error) {
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
 	var total int
-	countQuery := "SELECT COUNT(*) FROM system_log"
-	args := []interface{}{}
+	countQuery := "SELECT COUNT(*) FROM system_log WHERE 1=1"
+	countArgs := []interface{}{}
 	if level != "" {
-		countQuery += " WHERE level = ?"
-		args = append(args, level)
+		countQuery += " AND level = ?"
+		countArgs = append(countArgs, level)
 	}
-	if err := db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	if search != "" {
+		countQuery += " AND message LIKE ?"
+		countArgs = append(countArgs, "%"+search+"%")
+	}
+	if err := db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	query := "SELECT id, level, message, created_at FROM system_log"
+	query := "SELECT id, level, message, created_at FROM system_log WHERE 1=1"
 	whereArgs := []interface{}{}
 	if level != "" {
-		query += " WHERE level = ?"
+		query += " AND level = ?"
 		whereArgs = append(whereArgs, level)
+	}
+	if search != "" {
+		query += " AND message LIKE ?"
+		whereArgs = append(whereArgs, "%"+search+"%")
 	}
 	query += " ORDER BY id DESC LIMIT ? OFFSET ?"
 	whereArgs = append(whereArgs, pageSize, (page-1)*pageSize)

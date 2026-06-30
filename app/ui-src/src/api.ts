@@ -121,8 +121,8 @@ export const getSystemInfo = () => api.get<SystemInfo>('/system').then(r => r.da
 export const getWGKernel = () => api.get('/wg/kernel').then(r => r.data)
 
 // Logs
-export const getLogs = (page = 1, pageSize = 50, level = '') =>
-  api.get(`/logs?page=${page}&pageSize=${pageSize}&level=${level}`).then(r => r.data)
+export const getLogs = (page = 1, pageSize = 50, level = '', search = '') =>
+  api.get(`/logs?page=${page}&pageSize=${pageSize}&level=${level}&search=${encodeURIComponent(search)}`).then(r => r.data)
 export const cleanLogs = (days: number) => api.post('/logs/clean', { days }).then(r => r.data)
 
 // IP Hint

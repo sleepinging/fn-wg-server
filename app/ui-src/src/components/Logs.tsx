@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { getLogs, cleanLogs, LogEntry } from '../api'
 
 const LOG_LEVELS = ['', 'INFO', 'WARN', 'ERROR']
@@ -9,17 +9,20 @@ const Logs: React.FC = () => {
   const [size, setSize] = useState(0)
   const [page, setPage] = useState(1)
   const [level, setLevel] = useState('')
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [cleanDays, setCleanDays] = useState(7)
   const [loading, setLoading] = useState(false)
+  const searchTimer = useRef<number | null>(null)
 
   useEffect(() => {
     loadLogs()
-  }, [page, level])
+  }, [page, level, search])
 
   const loadLogs = async () => {
     setLoading(true)
     try {
-      const data = await getLogs(page, 50, level)
+      const data = await getLogs(page, 50, level, search)
       setLogs(data.data || [])
       setTotal(data.total || 0)
       setSize(data.size || 0)
@@ -28,6 +31,15 @@ const Logs: React.FC = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSearchInput = (value: string) => {
+    setSearchInput(value)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = window.setTimeout(() => {
+      setSearch(value)
+      setPage(1)
+    }, 400)
   }
 
   const handleClean = async () => {
@@ -39,6 +51,22 @@ const Logs: React.FC = () => {
     } catch (e: any) {
       alert('清理失败: ' + (e.response?.data?.error || e.message))
     }
+  }
+
+  const handleExport = () => {
+    const header = '时间,级别,消息\n'
+    const rows = logs.map(log =>
+      `[${log.createdAt}],[${log.level}],"${log.message.replace(/"/g, '""')}"`
+    ).join('\n')
+    const blob = new Blob(['\ufeff' + header + rows], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `wg-server-logs-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const formatSize = (bytes: number) => {
@@ -68,8 +96,25 @@ const Logs: React.FC = () => {
               <option key={l} value={l}>{l || '全部'}</option>
             ))}
           </select>
+          <button className="btn btn-sm btn-primary" onClick={handleExport}>导出 CSV</button>
           <button className="btn btn-sm" onClick={loadLogs}>刷新</button>
         </div>
+      </div>
+
+      <div className="log-search-bar">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={e => handleSearchInput(e.target.value)}
+          placeholder="搜索日志关键词..."
+          className="search-input"
+        />
+        {search && (
+          <span className="search-hint">
+            搜索 &ldquo;{search}&rdquo; 共 {total} 条结果
+            <button className="btn btn-sm" onClick={() => { setSearch(''); setSearchInput(''); setPage(1) }}>清除</button>
+          </span>
+        )}
       </div>
 
       <div className="log-clean">
@@ -88,10 +133,12 @@ const Logs: React.FC = () => {
         {loading && <div className="loading">加载中...</div>}
         {!loading && logs.length === 0 && <div className="empty">暂无日志</div>}
         {(logs || []).map(log => (
-          <div key={log.id} className={`log-entry ${getLevelClass(log.level)}`}>
+          <div key={log.id} className="log-entry">
             <span className="log-time">[{log.createdAt}]</span>
             <span className={`log-level log-level-${log.level.toLowerCase()}`}>[{log.level}]</span>
-            <span className="log-msg">{log.message}</span>
+            <span className={`log-msg ${getLevelClass(log.level)}`}>
+              {search ? highlightText(log.message, search) : log.message}
+            </span>
           </div>
         ))}
       </div>
@@ -103,6 +150,21 @@ const Logs: React.FC = () => {
       </div>
     </div>
   )
+}
+
+/** 高亮搜索关键词 */
+function highlightText(text: string, keyword: string): React.ReactNode {
+  if (!keyword) return text
+  const parts = text.split(new RegExp(`(${escapeRegex(keyword)})`, 'gi'))
+  return parts.map((part, i) =>
+    part.toLowerCase() === keyword.toLowerCase()
+      ? <mark key={i} className="log-highlight">{part}</mark>
+      : part
+  )
+}
+
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export default Logs

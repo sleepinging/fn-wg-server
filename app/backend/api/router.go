@@ -45,7 +45,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.16"
+var Version = "1.0.17"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -853,8 +853,9 @@ func handleLogs(w http.ResponseWriter, r *http.Request) {
 	fmt.Sscanf(r.FormValue("page"), "%d", &page)
 	fmt.Sscanf(r.FormValue("pageSize"), "%d", &pageSize)
 	level := r.FormValue("level")
+	search := r.FormValue("search")
 
-	logs, total, err := db.GetLogs(page, pageSize, level)
+	logs, total, err := db.GetLogs(page, pageSize, level, search)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

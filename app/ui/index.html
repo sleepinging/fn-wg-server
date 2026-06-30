@@ -10269,7 +10269,7 @@ const stopService = () => api.post("/service/stop").then((r2) => r2.data);
 const restartService = () => api.post("/service/restart").then((r2) => r2.data);
 const getSystemInfo = () => api.get("/system").then((r2) => r2.data);
 const getWGKernel = () => api.get("/wg/kernel").then((r2) => r2.data);
-const getLogs = (page = 1, pageSize = 50, level = "") => api.get(`/logs?page=${page}&pageSize=${pageSize}&level=${level}`).then((r2) => r2.data);
+const getLogs = (page = 1, pageSize = 50, level = "", search = "") => api.get(`/logs?page=${page}&pageSize=${pageSize}&level=${level}&search=${encodeURIComponent(search)}`).then((r2) => r2.data);
 const cleanLogs = (days) => api.post("/logs/clean", { days }).then((r2) => r2.data);
 const getIPHint = () => api.get("/ip/hint").then((r2) => r2.data);
 const api$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
@@ -32780,15 +32780,18 @@ const Logs = () => {
   const [size, setSize] = reactExports.useState(0);
   const [page, setPage] = reactExports.useState(1);
   const [level, setLevel] = reactExports.useState("");
+  const [search, setSearch] = reactExports.useState("");
+  const [searchInput, setSearchInput] = reactExports.useState("");
   const [cleanDays, setCleanDays] = reactExports.useState(7);
   const [loading, setLoading] = reactExports.useState(false);
+  const searchTimer = reactExports.useRef(null);
   reactExports.useEffect(() => {
     loadLogs();
-  }, [page, level]);
+  }, [page, level, search]);
   const loadLogs = async () => {
     setLoading(true);
     try {
-      const data = await getLogs(page, 50, level);
+      const data = await getLogs(page, 50, level, search);
       setLogs(data.data || []);
       setTotal(data.total || 0);
       setSize(data.size || 0);
@@ -32797,6 +32800,14 @@ const Logs = () => {
     } finally {
       setLoading(false);
     }
+  };
+  const handleSearchInput = (value) => {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = window.setTimeout(() => {
+      setSearch(value);
+      setPage(1);
+    }, 400);
   };
   const handleClean = async () => {
     var _a, _b;
@@ -32808,6 +32819,21 @@ const Logs = () => {
     } catch (e3) {
       alert("清理失败: " + (((_b = (_a = e3.response) == null ? void 0 : _a.data) == null ? void 0 : _b.error) || e3.message));
     }
+  };
+  const handleExport = () => {
+    const header = "时间,级别,消息\n";
+    const rows = logs.map(
+      (log2) => `[${log2.createdAt}],[${log2.level}],"${log2.message.replace(/"/g, '""')}"`
+    ).join("\n");
+    const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a2 = document.createElement("a");
+    a2.href = url;
+    a2.download = `wg-server-logs-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
+    URL.revokeObjectURL(url);
   };
   const formatSize = (bytes) => {
     if (!bytes) return "0 B";
@@ -32838,7 +32864,32 @@ const Logs = () => {
           setLevel(e3.target.value);
           setPage(1);
         }, children: LOG_LEVELS.map((l2) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: l2, children: l2 || "全部" }, l2)) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-primary", onClick: handleExport, children: "导出 CSV" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: loadLogs, children: "刷新" })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-search-bar", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          type: "text",
+          value: searchInput,
+          onChange: (e3) => handleSearchInput(e3.target.value),
+          placeholder: "搜索日志关键词...",
+          className: "search-input"
+        }
+      ),
+      search && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "search-hint", children: [
+        "搜索 “",
+        search,
+        "” 共 ",
+        total,
+        " 条结果",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => {
+          setSearch("");
+          setSearchInput("");
+          setPage(1);
+        }, children: "清除" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-clean", children: [
@@ -32858,7 +32909,7 @@ const Logs = () => {
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-list", style: { maxHeight: "500px", overflowY: "auto" }, children: [
       loading && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "loading", children: "加载中..." }),
       !loading && logs.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "empty", children: "暂无日志" }),
-      (logs || []).map((log2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `log-entry ${getLevelClass(log2.level)}`, children: [
+      (logs || []).map((log2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-entry", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "log-time", children: [
           "[",
           log2.createdAt,
@@ -32869,7 +32920,7 @@ const Logs = () => {
           log2.level,
           "]"
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "log-msg", children: log2.message })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `log-msg ${getLevelClass(log2.level)}`, children: search ? highlightText(log2.message, search) : log2.message })
       ] }, log2.id))
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pagination", children: [
@@ -32887,6 +32938,16 @@ const Logs = () => {
     ] })
   ] });
 };
+function highlightText(text, keyword) {
+  if (!keyword) return text;
+  const parts = text.split(new RegExp(`(${escapeRegex(keyword)})`, "gi"));
+  return parts.map(
+    (part, i) => part.toLowerCase() === keyword.toLowerCase() ? /* @__PURE__ */ jsxRuntimeExports.jsx("mark", { className: "log-highlight", children: part }, i) : part
+  );
+}
+function escapeRegex(s2) {
+  return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 const System = ({ systemInfo, wgKernel }) => {
   var _a;
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "system-page", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-cards", children: [
@@ -33431,6 +33492,43 @@ body {
 
 .input-with-hint input {
   flex: 1;
+}
+
+/* ==================== Log Search ==================== */
+.log-search-bar {
+  margin-bottom: 8px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.search-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.log-highlight {
+  background: #FFD54F;
+  color: #333;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 
 /* ==================== Page Header ==================== */
