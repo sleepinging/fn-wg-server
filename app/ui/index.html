@@ -10272,6 +10272,7 @@ const getWGKernel = () => api.get("/wg/kernel").then((r2) => r2.data);
 const getLogs = (page = 1, pageSize = 50, level = "", search = "") => api.get(`/logs?page=${page}&pageSize=${pageSize}&level=${level}&search=${encodeURIComponent(search)}`).then((r2) => r2.data);
 const cleanLogs = (days) => api.post("/logs/clean", { days }).then((r2) => r2.data);
 const getIPHint = () => api.get("/ip/hint").then((r2) => r2.data);
+const getUserConfig = (id2) => api.get(`/users/${id2}/config?format=json`).then((r2) => r2.data);
 const api$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   cleanLogs,
@@ -10287,6 +10288,7 @@ const api$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePropert
   getStatsHistory,
   getSystemInfo,
   getUser,
+  getUserConfig,
   getUserHistory,
   getUserStats,
   getUserTraffic,
@@ -32073,15 +32075,15 @@ const Dashboard = ({ onViewUser }) => {
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "操作" })
         ] }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("tbody", { children: [
-          (users || []).filter((u2) => u2.online).map((user) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.username }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.internalIP }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "ip", children: user.endpoint || "-" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user.rxBytes || 0) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user.txBytes || 0) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.onlineSince || "-" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => onViewUser(user.id), children: "详情" }) })
-          ] }, user.id)),
+          (users || []).filter((u2) => u2.online).map((user2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user2.username }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user2.internalIP }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "ip", children: user2.endpoint || "-" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user2.rxBytes || 0) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user2.txBytes || 0) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user2.onlineSince || "-" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => onViewUser(user2.id), children: "详情" }) })
+          ] }, user2.id)),
           users.filter((u2) => u2.online).length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 7, className: "empty", children: "暂无在线用户" }) })
         ] })
       ] })
@@ -32124,12 +32126,12 @@ const Users = ({ onViewUser }) => {
     const timer = setInterval(loadUsers, 1e4);
     return () => clearInterval(timer);
   }, [loadUsers]);
-  const handleDelete = async (user) => {
+  const handleDelete = async (user2) => {
     var _a, _b;
-    if (!confirm(`确定删除用户 "${user.username}"？
+    if (!confirm(`确定删除用户 "${user2.username}"？
 删除后将强制该用户下线。`)) return;
     try {
-      await deleteUser(user.id);
+      await deleteUser(user2.id);
       loadUsers();
     } catch (e3) {
       alert("删除失败: " + (((_b = (_a = e3.response) == null ? void 0 : _a.data) == null ? void 0 : _b.error) || e3.message));
@@ -32268,26 +32270,26 @@ const Users = ({ onViewUser }) => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "操作" })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("tbody", { children: [
-        (users || []).map((user) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: user.online ? "row-online" : "", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.id }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.username }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "ip", children: user.internalIP }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "mono", title: user.publicKey, children: [
-            user.publicKey.substring(0, 16),
+        (users || []).map((user2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: user2.online ? "row-online" : "", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user2.id }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user2.username }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "ip", children: user2.internalIP }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "mono", title: user2.publicKey, children: [
+            user2.publicKey.substring(0, 16),
             "..."
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${user.online ? "online" : "offline"}` }),
-            user.online ? "在线" : "离线"
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${user2.online ? "online" : "offline"}` }),
+            user2.online ? "在线" : "离线"
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user.rxBytes || 0) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user.txBytes || 0) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.createdAt }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user2.rxBytes || 0) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user2.txBytes || 0) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user2.createdAt }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "actions", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => onViewUser(user.id), children: "详情" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-danger", onClick: () => handleDelete(user), children: "删除" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => onViewUser(user2.id), children: "详情" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-danger", onClick: () => handleDelete(user2), children: "删除" })
           ] })
-        ] }, user.id)),
+        ] }, user2.id)),
         users.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 9, className: "empty", children: '暂无用户，点击"添加用户"开始' }) })
       ] })
     ] })
@@ -32366,10 +32368,12 @@ const __vitePreload = function preload(baseModule, deps, importerUrl) {
   });
 };
 const UserDetail = ({ userId, onBack }) => {
-  const [user, setUser] = reactExports.useState(null);
+  const [user2, setUser] = reactExports.useState(null);
   const [stats, setStats] = reactExports.useState(null);
   const [traffic, setTraffic] = reactExports.useState(null);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
+  const [showConfig2, setShowConfig2] = reactExports.useState(false);
+  const [clientConfig2, setClientConfig] = reactExports.useState(null);
   reactExports.useEffect(() => {
     loadData();
     const timer = setInterval(loadData, 1e4);
@@ -32410,7 +32414,16 @@ const UserDetail = ({ userId, onBack }) => {
     rxBytes: p2.rxBytes || 0,
     txBytes: p2.txBytes || 0
   }));
-  if (!user) {
+  const handleExportConfig = async () => {
+    try {
+      const data = await getUserConfig(userId);
+      setClientConfig(data);
+      setShowConfig2(true);
+    } catch (e3) {
+      alert("获取配置失败");
+    }
+  };
+  if (!user2) {
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "loading", children: "加载中..." });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "user-detail", children: [
@@ -32418,15 +32431,16 @@ const UserDetail = ({ userId, onBack }) => {
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: onBack, children: "← 返回" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { children: [
         "用户详情: ",
-        user.username
+        user2.username
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${(stats == null ? void 0 : stats.online) ? "online" : "offline"}` }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (stats == null ? void 0 : stats.online) ? "在线" : "离线" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (stats == null ? void 0 : stats.online) ? "在线" : "离线" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary btn-sm", onClick: handleExportConfig, children: "导出配置" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stats-grid", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "内部IP" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value ip", children: user.internalIP })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value ip", children: user2.internalIP })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "外部IP" }),
@@ -32444,32 +32458,32 @@ const UserDetail = ({ userId, onBack }) => {
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-grid", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "公钥" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user.publicKey })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user2.publicKey })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "私钥" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "blur", onClick: (e3) => e3.target.classList.toggle("blur"), children: user.privateKey || "未显示" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "blur", onClick: (e3) => e3.target.classList.toggle("blur"), children: user2.privateKey || "未显示" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "预共享密钥" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user.presharedKey || "无" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user2.presharedKey || "无" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "允许的IP" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user.allowedIPs })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user2.allowedIPs })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "DNS" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user.dns || "默认" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user2.dns || "默认" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "MTU" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user.mtu })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: user2.mtu })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "Keepalive" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("code", { children: [
-          user.persistentKeepalive,
+          user2.persistentKeepalive,
           "s"
         ] })
       ] }),
@@ -32562,7 +32576,46 @@ const HistoryTable = ({ userId }) => {
         " 页"
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", disabled: page >= Math.ceil(total / 20), onClick: () => setPage((p2) => p2 + 1), children: "下一页" })
-    ] })
+    ] }),
+    showConfig && clientConfig && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-overlay", onClick: () => setShowConfig(false), children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal config-modal", onClick: (e3) => e3.stopPropagation(), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("h4", { children: [
+        "客户端配置 - ",
+        user == null ? void 0 : user.username
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "config-hint", children: "将此配置导入 WireGuard 客户端即可连接" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-details", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "服务端公钥" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: clientConfig.serverPublicKey })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "服务端地址" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: clientConfig.serverEndpoint })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "客户端IP" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: clientConfig.clientAddress })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "DNS" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: clientConfig.clientDNS })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          className: "config-textarea",
+          readOnly: true,
+          value: clientConfig.config,
+          rows: 12,
+          onClick: (e3) => e3.target.select()
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-actions", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setShowConfig(false), children: "关闭" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: downloadConfig, children: "下载 .conf 文件" })
+      ] })
+    ] }) })
   ] });
 };
 function formatBytesSimple(bytes) {
@@ -33593,6 +33646,62 @@ body {
   color: #333;
   padding: 0 2px;
   border-radius: 2px;
+}
+
+/* ==================== Config Modal ==================== */
+.config-modal {
+  width: 600px;
+}
+
+.config-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.config-details {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-row label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.config-row code {
+  font-size: 12px;
+  word-break: break-all;
+  background: #f5f5f5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex: 1;
+}
+
+.config-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.config-textarea:focus {
+  outline: none;
 }
 
 /* ==================== Page Header ==================== */

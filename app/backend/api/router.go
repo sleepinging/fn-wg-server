@@ -45,7 +45,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.22"
+var Version = "1.0.24"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -312,6 +312,9 @@ func handleUserByID(w http.ResponseWriter, r *http.Request) {
 			return
 		case "traffic":
 			handleUserTraffic(w, r, userID)
+			return
+		case "config":
+			handleUserConfig(w, r, userID)
 			return
 		}
 	}
@@ -1103,13 +1106,92 @@ func stopMonitor() {
 }
 
 func setAutoStart(enabled bool) {
-	// Create/remove systemd service symlink
 	serviceName := "wg-server.service"
 	if enabled {
 		exec.Command("systemctl", "enable", serviceName).Run()
 	} else {
 		exec.Command("systemctl", "disable", serviceName).Run()
 	}
+}
+
+func handleUserConfig(w http.ResponseWriter, r *http.Request, userID int) {
+	user, err := db.GetUserByID(userID)
+	if err != nil || user == nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	cfg, err := wg.LoadConfig()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "load config: "+err.Error())
+		return
+	}
+
+	// 获取服务端公网地址
+	serverEndpoint := getExternalIP()
+	if serverEndpoint == "" || serverEndpoint == "Unknown" {
+		serverEndpoint = "YOUR_SERVER_IP"
+	}
+	serverEndpoint = fmt.Sprintf("%s:%d", serverEndpoint, cfg.ListenPort)
+
+	// 准备 DNS
+	dns := cfg.DNS
+	if dns == "" {
+		dns = "114.114.114.114, 8.8.8.8"
+	}
+
+	// 提取用户 IP（去掉 /32 后缀）
+	clientIP := strings.TrimSuffix(user.InternalIP, "/32")
+	if clientIP == "" {
+		clientIP = user.InternalIP
+	}
+
+	// 构建配置文件文本
+	config := fmt.Sprintf(`[Interface]
+PrivateKey = %s
+Address = %s
+DNS = %s
+MTU = %d
+
+[Peer]
+PublicKey = %s
+Endpoint = %s
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = %d
+`,
+		user.PrivateKey,
+		clientIP,
+		dns,
+		user.MTU,
+		cfg.PublicKey,
+		serverEndpoint,
+		user.PersistentKeepalive,
+	)
+
+	// 支持 format 参数：conf / json
+	format := r.URL.Query().Get("format")
+	if format == "json" {
+		// JSON 格式供前端展示
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"config":           config,
+			"clientPrivateKey": user.PrivateKey,
+			"clientAddress":    clientIP,
+			"clientDNS":        dns,
+			"clientMTU":        user.MTU,
+			"serverPublicKey":  cfg.PublicKey,
+			"serverEndpoint":   serverEndpoint,
+			"persistentKeepalive": user.PersistentKeepalive,
+			"filename":         fmt.Sprintf("wg-client-%s.conf", user.Username),
+		})
+		return
+	}
+
+	// conf 格式直接下载文件
+	filename := fmt.Sprintf("wg-client-%s.conf", user.Username)
+	w.Header().Set("Content-Type", "application/wireguard-config")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(config))
 }
 
 

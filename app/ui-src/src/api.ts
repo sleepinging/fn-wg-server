@@ -127,5 +127,6 @@ export const cleanLogs = (days: number) => api.post('/logs/clean', { days }).the
 
 // IP Hint
 export const getIPHint = () => api.get('/ip/hint').then(r => r.data)
+export const getUserConfig = (id: number) => api.get(`/users/${id}/config?format=json`).then(r => r.data)
 
 export default api
