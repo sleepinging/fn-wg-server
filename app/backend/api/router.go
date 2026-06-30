@@ -45,7 +45,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.19"
+var Version = "1.0.21"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -801,6 +801,22 @@ func serviceStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func serviceStart(w http.ResponseWriter, r *http.Request) {
+	// 确保 wireguard-tools 已安装
+	if _, err := exec.LookPath("wg"); err != nil {
+		// 尝试自动安装
+		install := exec.Command("apt-get", "install", "-y", "wireguard-tools")
+		if out, err := install.CombinedOutput(); err != nil {
+			db.Log("ERROR", fmt.Sprintf("Failed to install wireguard-tools: %s %v", string(out), err))
+			writeError(w, http.StatusInternalServerError,
+				"wg command not found. Please install wireguard-tools first: sudo apt-get install wireguard-tools")
+			return
+		}
+		db.Log("INFO", "wireguard-tools installed automatically")
+	}
+
+	// Enable IP forwarding
+	exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
+
 	// Initialize WireGuard interface
 	if err := wg.InitInterface(); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start WireGuard: "+err.Error())

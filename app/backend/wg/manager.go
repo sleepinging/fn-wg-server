@@ -29,14 +29,32 @@ type WGConfig struct {
 
 // DefaultConfig returns the default WireGuard configuration.
 func DefaultConfig() WGConfig {
+	// 自动检测默认出口网卡
+	wanIface := detectWANInterface()
 	return WGConfig{
 		InterfaceName: "wg0",
 		Address:       "192.168.5.1/24",
 		ListenPort:    51820,
 		MTU:           1420,
-		PostUp:        "iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
-		PostDown:      "iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE",
+		PostUp:        fmt.Sprintf("iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE", wanIface),
+		PostDown:      fmt.Sprintf("iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE", wanIface),
 	}
+}
+
+// detectWANInterface 检测默认路由出口网卡名称
+func detectWANInterface() string {
+	data, err := os.ReadFile("/proc/net/route")
+	if err != nil {
+		return "eth0"
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines[1:] { // 跳过标题行
+		fields := strings.Fields(line)
+		if len(fields) >= 3 && fields[1] == "00000000" && fields[2] != "00000000" {
+			return fields[0] // 默认路由的网卡名
+		}
+	}
+	return "eth0"
 }
 
 // GenerateKey generates a WireGuard key pair using pure Go (no wg command needed).
