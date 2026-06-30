@@ -1,0 +1,66 @@
+#!/bin/bash
+# WireGuard 服务端 — 生命周期脚本
+# 管理监控守护进程的启动/停止/状态检查。
+
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+mkdir -p "$(dirname "${LOG_FILE}")" 2>/dev/null
+log_msg() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}" 2>/dev/null; }
+
+APP_DEST="${TRIM_APPDEST:-/var/apps/wg-server/target}"
+PKG_VAR="${TRIM_PKGVAR:-/var/apps/wg-server/var}"
+BINARY="${APP_DEST}/backend/wg-server"
+
+mkdir -p "${PKG_VAR}" 2>/dev/null
+
+case $1 in
+start)
+    # 启动监控守护进程
+    if [ -f "${PKG_VAR}/monitor.pid" ]; then
+        PID=$(cat "${PKG_VAR}/monitor.pid")
+        if kill -0 "$PID" 2>/dev/null; then
+            log_msg "监控守护进程已在运行 (PID: ${PID})"
+            exit 0
+        fi
+        rm -f "${PKG_VAR}/monitor.pid"
+    fi
+
+    if [ -x "${BINARY}" ]; then
+        export TRIM_PKGVAR="${PKG_VAR}"
+        nohup "${BINARY}" daemon >> "${LOG_FILE}" 2>&1 &
+        PID=$!
+        echo ${PID} > "${PKG_VAR}/monitor.pid"
+        log_msg "监控守护进程已启动 (PID: ${PID})"
+    else
+        log_msg "错误: 找不到 ${BINARY}"
+        exit 1
+    fi
+    exit 0
+    ;;
+stop)
+    # 停止监控守护进程
+    if [ -f "${PKG_VAR}/monitor.pid" ]; then
+        PID=$(cat "${PKG_VAR}/monitor.pid")
+        if kill -0 "$PID" 2>/dev/null; then
+            kill "${PID}" 2>/dev/null
+            sleep 1
+            log_msg "监控守护进程已停止 (PID: ${PID})"
+        fi
+        rm -f "${PKG_VAR}/monitor.pid"
+    fi
+    exit 0
+    ;;
+status)
+    # 检查状态
+    if [ -f "${PKG_VAR}/monitor.pid" ]; then
+        PID=$(cat "${PKG_VAR}/monitor.pid")
+        if kill -0 "$PID" 2>/dev/null; then
+            exit 0
+        fi
+        rm -f "${PKG_VAR}/monitor.pid"
+    fi
+    exit 0
+    ;;
+*)
+    exit 1
+    ;;
+esac

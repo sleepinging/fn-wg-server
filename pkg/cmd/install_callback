@@ -1,0 +1,31 @@
+#!/bin/bash
+### 安装后执行：确保 index.cgi 和 wg-server 可执行，重启 trim_http_cgi 使其生效。
+
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+mkdir -p "$(dirname "${LOG_FILE}")" 2>/dev/null
+log_msg() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}" 2>/dev/null; }
+
+APP_DEST="${TRIM_APPDEST:-/var/apps/wg-server/target}"
+
+# 设置可执行权限
+CGI="${APP_DEST}/ui/index.cgi"
+if [ -f "$CGI" ]; then
+    chmod +x "$CGI" 2>/dev/null
+    log_msg "install_callback: chmod +x $CGI"
+fi
+
+BINARY="${APP_DEST}/backend/wg-server"
+if [ -f "$BINARY" ]; then
+    chmod +x "$BINARY" 2>/dev/null
+    log_msg "install_callback: chmod +x $BINARY"
+fi
+
+# 创建 data 目录
+PKG_VAR="${TRIM_PKGVAR:-/var/apps/wg-server/var}"
+mkdir -p "${PKG_VAR}" 2>/dev/null
+log_msg "install_callback: 数据目录 ${PKG_VAR}"
+
+# 让 fnOS 的 CGI 服务重新加载
+systemctl restart trim_http_cgi.service 2>/dev/null && log_msg "restarted trim_http_cgi" || log_msg "restart trim_http_cgi failed (可能无权限，重启系统后生效)"
+
+exit 0

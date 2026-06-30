@@ -1,0 +1,14 @@
+[Unit]
+Description=WireGuard Server Monitoring Daemon
+After=network.target wireguard.service
+Wants=wireguard.service
+
+[Service]
+Type=simple
+ExecStart=/var/apps/wg-server/target/backend/wg-server daemon
+Environment=TRIM_PKGVAR=/var/apps/wg-server/var
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

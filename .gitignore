@@ -1,0 +1,24 @@
+# Go
+app/backend/wg-server
+app/backend/wg-server.exe
+
+# Node
+node_modules/
+app/ui-src/node_modules/
+
+# Build output
+app/ui/assets/
+*.fpk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
