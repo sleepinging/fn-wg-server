@@ -13,11 +13,20 @@ const Logs: React.FC = () => {
   const [searchInput, setSearchInput] = useState('')
   const [cleanDays, setCleanDays] = useState(7)
   const [loading, setLoading] = useState(false)
+  const [autoScroll, setAutoScroll] = useState(true)
   const searchTimer = useRef<number | null>(null)
+  const logListRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadLogs()
   }, [page, level, search])
+
+  // 每次日志加载后自动滚动到底部
+  useEffect(() => {
+    if (autoScroll && logListRef.current) {
+      logListRef.current.scrollTop = logListRef.current.scrollHeight
+    }
+  }, [logs, autoScroll])
 
   const loadLogs = async () => {
     setLoading(true)
@@ -53,20 +62,27 @@ const Logs: React.FC = () => {
     }
   }
 
-  const handleExport = () => {
-    const header = '时间,级别,消息\n'
-    const rows = logs.map(log =>
-      `[${log.createdAt}],[${log.level}],"${log.message.replace(/"/g, '""')}"`
-    ).join('\n')
-    const blob = new Blob(['\ufeff' + header + rows], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `wg-server-logs-${new Date().toISOString().slice(0, 10)}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+  /** 导出原始日志文件（plain text） */
+  const handleExportRaw = async () => {
+    try {
+      // 拉取全部日志（不分页）以纯文本格式导出
+      const allData = await getLogs(1, total || 10000, '', '')
+      const entries = allData.data || []
+      const lines = entries.map((log: LogEntry) =>
+        `[${log.createdAt}] [${log.level}] ${log.message}`
+      ).join('\n')
+      const blob = new Blob([lines + '\n'], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `wg-server-logs-${new Date().toISOString().slice(0, 10)}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('导出失败')
+    }
   }
 
   const formatSize = (bytes: number) => {
@@ -96,7 +112,7 @@ const Logs: React.FC = () => {
               <option key={l} value={l}>{l || '全部'}</option>
             ))}
           </select>
-          <button className="btn btn-sm btn-primary" onClick={handleExport}>导出 CSV</button>
+          <button className="btn btn-sm btn-primary" onClick={handleExportRaw}>导出原始日志</button>
           <button className="btn btn-sm" onClick={loadLogs}>刷新</button>
         </div>
       </div>
@@ -127,9 +143,13 @@ const Logs: React.FC = () => {
         />
         <span>天前的日志</span>
         <button className="btn btn-sm btn-danger" onClick={handleClean}>清理</button>
+        <label style={{ marginLeft: 16, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+          <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
+          自动滚动到底部
+        </label>
       </div>
 
-      <div className="log-list" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+      <div className="log-list" ref={logListRef} style={{ maxHeight: '500px', overflowY: 'auto' }}>
         {loading && <div className="loading">加载中...</div>}
         {!loading && logs.length === 0 && <div className="empty">暂无日志</div>}
         {(logs || []).map(log => (

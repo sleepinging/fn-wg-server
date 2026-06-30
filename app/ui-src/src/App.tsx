@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { getSystemInfo, getWGKernel } from './api'
 import Dashboard from './components/Dashboard'
 import Users from './components/Users'
@@ -14,12 +14,19 @@ const App: React.FC = () => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [systemInfo, setSystemInfo] = useState<any>(null)
   const [wgKernel, setWgKernel] = useState<any>(null)
+  const [sysRefreshInterval, setSysRefreshInterval] = useState(30000) // 默认 30 秒
+  const timerRef = useRef<number | null>(null)
 
+  // 系统信息定时刷新（间隔可配置）
   useEffect(() => {
     loadSystemInfo()
-    const timer = setInterval(loadSystemInfo, 30000)
-    return () => clearInterval(timer)
-  }, [])
+    if (sysRefreshInterval > 0) {
+      timerRef.current = window.setInterval(loadSystemInfo, sysRefreshInterval)
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [sysRefreshInterval])
 
   const loadSystemInfo = async () => {
     try {
@@ -64,7 +71,14 @@ const App: React.FC = () => {
       case 'logs':
         return <Logs />
       case 'system':
-        return <System systemInfo={systemInfo} wgKernel={wgKernel} />
+        return (
+          <System
+            systemInfo={systemInfo}
+            wgKernel={wgKernel}
+            refreshInterval={sysRefreshInterval}
+            onRefreshIntervalChange={setSysRefreshInterval}
+          />
+        )
       default:
         return <Dashboard onViewUser={handleViewUser} />
     }

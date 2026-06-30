@@ -32784,10 +32784,17 @@ const Logs = () => {
   const [searchInput, setSearchInput] = reactExports.useState("");
   const [cleanDays, setCleanDays] = reactExports.useState(7);
   const [loading, setLoading] = reactExports.useState(false);
+  const [autoScroll, setAutoScroll] = reactExports.useState(true);
   const searchTimer = reactExports.useRef(null);
+  const logListRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     loadLogs();
   }, [page, level, search]);
+  reactExports.useEffect(() => {
+    if (autoScroll && logListRef.current) {
+      logListRef.current.scrollTop = logListRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll]);
   const loadLogs = async () => {
     setLoading(true);
     try {
@@ -32820,20 +32827,25 @@ const Logs = () => {
       alert("清理失败: " + (((_b = (_a = e3.response) == null ? void 0 : _a.data) == null ? void 0 : _b.error) || e3.message));
     }
   };
-  const handleExport = () => {
-    const header = "时间,级别,消息\n";
-    const rows = logs.map(
-      (log2) => `[${log2.createdAt}],[${log2.level}],"${log2.message.replace(/"/g, '""')}"`
-    ).join("\n");
-    const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a2 = document.createElement("a");
-    a2.href = url;
-    a2.download = `wg-server-logs-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
-    URL.revokeObjectURL(url);
+  const handleExportRaw = async () => {
+    try {
+      const allData = await getLogs(1, total || 1e4, "", "");
+      const entries = allData.data || [];
+      const lines = entries.map(
+        (log2) => `[${log2.createdAt}] [${log2.level}] ${log2.message}`
+      ).join("\n");
+      const blob = new Blob([lines + "\n"], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a2 = document.createElement("a");
+      a2.href = url;
+      a2.download = `wg-server-logs-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.txt`;
+      document.body.appendChild(a2);
+      a2.click();
+      document.body.removeChild(a2);
+      URL.revokeObjectURL(url);
+    } catch (e3) {
+      alert("导出失败");
+    }
   };
   const formatSize = (bytes) => {
     if (!bytes) return "0 B";
@@ -32864,7 +32876,7 @@ const Logs = () => {
           setLevel(e3.target.value);
           setPage(1);
         }, children: LOG_LEVELS.map((l2) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: l2, children: l2 || "全部" }, l2)) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-primary", onClick: handleExport, children: "导出 CSV" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-primary", onClick: handleExportRaw, children: "导出原始日志" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: loadLogs, children: "刷新" })
       ] })
     ] }),
@@ -32904,9 +32916,13 @@ const Logs = () => {
         }
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "天前的日志" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-danger", onClick: handleClean, children: "清理" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-danger", onClick: handleClean, children: "清理" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { marginLeft: 16, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: autoScroll, onChange: (e3) => setAutoScroll(e3.target.checked) }),
+        "自动滚动到底部"
+      ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-list", style: { maxHeight: "500px", overflowY: "auto" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-list", ref: logListRef, style: { maxHeight: "500px", overflowY: "auto" }, children: [
       loading && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "loading", children: "加载中..." }),
       !loading && logs.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "empty", children: "暂无日志" }),
       (logs || []).map((log2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-entry", children: [
@@ -32948,58 +32964,92 @@ function highlightText(text, keyword) {
 function escapeRegex(s2) {
   return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-const System = ({ systemInfo, wgKernel }) => {
+const INTERVAL_OPTIONS = [
+  { label: "1 秒", value: 1e3 },
+  { label: "2 秒", value: 2e3 },
+  { label: "5 秒", value: 5e3 },
+  { label: "10 秒", value: 1e4 },
+  { label: "30 秒", value: 3e4 },
+  { label: "不自动刷新", value: 0 }
+];
+const System = ({ systemInfo, wgKernel, refreshInterval, onRefreshIntervalChange }) => {
   var _a;
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "system-page", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-cards", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "程序信息" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "版本号" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.version) || "N/A" })
+  const handleManualRefresh = async () => {
+    try {
+      const [info, kernel] = await Promise.all([
+        getSystemInfo(),
+        getWGKernel()
+      ]);
+      window.location.reload();
+    } catch (e3) {
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "system-page", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "system-controls-bar", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "refresh-control", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "刷新间隔：" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "select",
+          {
+            value: refreshInterval,
+            onChange: (e3) => onRefreshIntervalChange(parseInt(e3.target.value)),
+            children: INTERVAL_OPTIONS.map((opt) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: opt.value, children: opt.label }, opt.value))
+          }
+        )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "CPU占用" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.cpuUsage) || "N/A" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内存占用" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.processMemory) || "N/A" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "服务运行时间" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.uptime) || "N/A" })
-      ] })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: handleManualRefresh, children: "立即刷新" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "系统信息" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "总内存" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.memory) ? formatBytes(systemInfo.memory.total) : "N/A" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "可用内存" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.memory) ? formatBytes(systemInfo.memory.available) : "N/A" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内存使用率" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: ((_a = systemInfo == null ? void 0 : systemInfo.memory) == null ? void 0 : _a.usedPercent) || "N/A" })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "WireGuard 内核状态" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内核模块" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${(wgKernel == null ? void 0 : wgKernel.moduleLoaded) ? "online" : "offline"}` }),
-          (wgKernel == null ? void 0 : wgKernel.moduleLoaded) ? "已加载" : "未加载"
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-cards", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "程序信息" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "版本号" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.version) || "N/A" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "CPU占用" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.cpuUsage) || "N/A" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内存占用" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.processMemory) || "N/A" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "服务运行时间" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.uptime) || "N/A" })
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内核版本" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mono", style: { fontSize: "0.85em" }, children: (wgKernel == null ? void 0 : wgKernel.kernelVersion) ? wgKernel.kernelVersion.substring(0, 80) + "..." : "N/A" })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "系统信息" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "总内存" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.memory) ? formatBytes(systemInfo.memory.total) : "N/A" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "可用内存" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (systemInfo == null ? void 0 : systemInfo.memory) ? formatBytes(systemInfo.memory.available) : "N/A" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内存使用率" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: ((_a = systemInfo == null ? void 0 : systemInfo.memory) == null ? void 0 : _a.usedPercent) || "N/A" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "WireGuard 内核状态" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内核模块" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${(wgKernel == null ? void 0 : wgKernel.moduleLoaded) ? "online" : "offline"}` }),
+            (wgKernel == null ? void 0 : wgKernel.moduleLoaded) ? "已加载" : "未加载"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内核版本" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mono", style: { fontSize: "0.85em" }, children: (wgKernel == null ? void 0 : wgKernel.kernelVersion) ? wgKernel.kernelVersion.substring(0, 80) + "..." : "N/A" })
+        ] })
       ] })
     ] })
-  ] }) });
+  ] });
 };
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
@@ -33013,11 +33063,17 @@ const App = () => {
   const [selectedUserId, setSelectedUserId] = reactExports.useState(null);
   const [systemInfo, setSystemInfo] = reactExports.useState(null);
   const [wgKernel, setWgKernel] = reactExports.useState(null);
+  const [sysRefreshInterval, setSysRefreshInterval] = reactExports.useState(3e4);
+  const timerRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     loadSystemInfo();
-    const timer = setInterval(loadSystemInfo, 3e4);
-    return () => clearInterval(timer);
-  }, []);
+    if (sysRefreshInterval > 0) {
+      timerRef.current = window.setInterval(loadSystemInfo, sysRefreshInterval);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [sysRefreshInterval]);
   const loadSystemInfo = async () => {
     try {
       const [info, kernel] = await Promise.all([
@@ -33053,7 +33109,15 @@ const App = () => {
       case "logs":
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Logs, {});
       case "system":
-        return /* @__PURE__ */ jsxRuntimeExports.jsx(System, { systemInfo, wgKernel });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          System,
+          {
+            systemInfo,
+            wgKernel,
+            refreshInterval: sysRefreshInterval,
+            onRefreshIntervalChange: setSysRefreshInterval
+          }
+        );
       default:
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Dashboard, { onViewUser: handleViewUser });
     }
@@ -33753,6 +33817,31 @@ code.blur:hover {
 }
 
 /* ==================== System ==================== */
+.system-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.refresh-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.refresh-control select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
 .info-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
