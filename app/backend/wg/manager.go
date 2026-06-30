@@ -1,12 +1,15 @@
 package wg
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"strings"
+
+	"golang.org/x/crypto/curve25519"
 
 	"wg-server/db"
 )
@@ -36,35 +39,40 @@ func DefaultConfig() WGConfig {
 	}
 }
 
-// GenerateKey generates a WireGuard key pair.
+// GenerateKey generates a WireGuard key pair using pure Go (no wg command needed).
 func GenerateKey() (privateKey, publicKey string, err error) {
-	// Use wg command
-	cmd := exec.Command("wg", "genkey")
-	out, err := cmd.Output()
-	if err != nil {
+	// Generate 32 random bytes for the private key
+	var priv [32]byte
+	if _, err := rand.Read(priv[:]); err != nil {
 		return "", "", fmt.Errorf("generate private key: %w", err)
 	}
-	privateKey = strings.TrimSpace(string(out))
 
-	cmd = exec.Command("wg", "pubkey")
-	cmd.Stdin = strings.NewReader(privateKey)
-	out, err = cmd.Output()
-	if err != nil {
-		return "", "", fmt.Errorf("generate public key: %w", err)
-	}
-	publicKey = strings.TrimSpace(string(out))
+	// Clamp the private key per WireGuard spec:
+	// - Clear lowest 3 bits of byte 0
+	// - Set highest bit of byte 31
+	// - Clear 2nd highest bit of byte 31
+	priv[0] &= 248
+	priv[31] &= 127
+	priv[31] |= 64
+
+	// Compute public key = priv * basepoint
+	var pub [32]byte
+	curve25519.ScalarBaseMult(&pub, &priv)
+
+	// Encode both as base64
+	privateKey = base64.StdEncoding.EncodeToString(priv[:])
+	publicKey = base64.StdEncoding.EncodeToString(pub[:])
 
 	return privateKey, publicKey, nil
 }
 
-// GeneratePresharedKey generates a preshared key.
+// GeneratePresharedKey generates a preshared key (32 random bytes, base64 encoded).
 func GeneratePresharedKey() (string, error) {
-	cmd := exec.Command("wg", "genpsk")
-	out, err := cmd.Output()
-	if err != nil {
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
 		return "", fmt.Errorf("generate preshared key: %w", err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	return base64.StdEncoding.EncodeToString(key[:]), nil
 }
 
 // LoadConfig loads WireGuard configuration from database.
