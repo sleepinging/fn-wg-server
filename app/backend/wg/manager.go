@@ -7,9 +7,12 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/curve25519"
+	"golang.zx2c4.com/wireguard/wgctrl"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"wg-server/db"
 )
@@ -29,62 +32,61 @@ type WGConfig struct {
 
 // DefaultConfig returns the default WireGuard configuration.
 func DefaultConfig() WGConfig {
-	// 自动检测默认出口网卡
 	wanIface := detectWANInterface()
+	iface := detectDefaultInterfaceName()
 	return WGConfig{
-		InterfaceName: "wg0",
+		InterfaceName: iface,
 		Address:       "192.168.5.1/24",
 		ListenPort:    51820,
 		MTU:           1420,
-		PostUp:        fmt.Sprintf("iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE", wanIface),
-		PostDown:      fmt.Sprintf("iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE", wanIface),
+		PostUp:        fmt.Sprintf("iptables -A FORWARD -i %s -j ACCEPT; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE", iface, wanIface),
+		PostDown:      fmt.Sprintf("iptables -D FORWARD -i %s -j ACCEPT; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE", iface, wanIface),
 	}
 }
 
-// detectWANInterface 检测默认路由出口网卡名称
 func detectWANInterface() string {
 	data, err := os.ReadFile("/proc/net/route")
 	if err != nil {
 		return "eth0"
 	}
 	lines := strings.Split(string(data), "\n")
-	for _, line := range lines[1:] { // 跳过标题行
+	for _, line := range lines[1:] {
 		fields := strings.Fields(line)
-		if len(fields) >= 3 && fields[1] == "00000000" && fields[2] != "00000000" {
-			return fields[0] // 默认路由的网卡名
+		if len(fields) >= 3 && fields[1] == "00000000" {
+			return fields[0]
 		}
 	}
 	return "eth0"
 }
 
-// GenerateKey generates a WireGuard key pair using pure Go (no wg command needed).
+func detectDefaultInterfaceName() string {
+	// 找第一个可用的 wg 接口名
+	for i := 0; i < 10; i++ {
+		name := fmt.Sprintf("wg%d", i)
+		if _, err := net.InterfaceByName(name); err != nil {
+			return name
+		}
+	}
+	return "wg0"
+}
+
+// ==================== 密钥生成 ====================
+
 func GenerateKey() (privateKey, publicKey string, err error) {
-	// Generate 32 random bytes for the private key
 	var priv [32]byte
 	if _, err := rand.Read(priv[:]); err != nil {
 		return "", "", fmt.Errorf("generate private key: %w", err)
 	}
-
-	// Clamp the private key per WireGuard spec:
-	// - Clear lowest 3 bits of byte 0
-	// - Set highest bit of byte 31
-	// - Clear 2nd highest bit of byte 31
 	priv[0] &= 248
 	priv[31] &= 127
 	priv[31] |= 64
-
-	// Compute public key = priv * basepoint
 	var pub [32]byte
 	curve25519.ScalarBaseMult(&pub, &priv)
-
-	// Encode both as base64
 	privateKey = base64.StdEncoding.EncodeToString(priv[:])
 	publicKey = base64.StdEncoding.EncodeToString(pub[:])
-
 	return privateKey, publicKey, nil
 }
 
-// GeneratePresharedKey generates a preshared key (32 random bytes, base64 encoded).
 func GeneratePresharedKey() (string, error) {
 	var key [32]byte
 	if _, err := rand.Read(key[:]); err != nil {
@@ -93,15 +95,14 @@ func GeneratePresharedKey() (string, error) {
 	return base64.StdEncoding.EncodeToString(key[:]), nil
 }
 
-// LoadConfig loads WireGuard configuration from database.
+// ==================== 配置读写 ====================
+
 func LoadConfig() (*WGConfig, error) {
 	cfg := DefaultConfig()
-
 	all, err := db.GetAllConfig()
 	if err != nil {
 		return nil, err
 	}
-
 	if v, ok := all["wg_private_key"]; ok {
 		cfg.PrivateKey = v
 	}
@@ -129,11 +130,9 @@ func LoadConfig() (*WGConfig, error) {
 	if v, ok := all["interface_name"]; ok {
 		cfg.InterfaceName = v
 	}
-
 	return &cfg, nil
 }
 
-// SaveConfig saves WireGuard configuration to database.
 func SaveConfig(cfg WGConfig) error {
 	pairs := map[string]string{
 		"wg_private_key": cfg.PrivateKey,
@@ -154,78 +153,84 @@ func SaveConfig(cfg WGConfig) error {
 	return nil
 }
 
-// WriteConfigFile writes the WireGuard config file and applies it.
-func WriteConfigFile(cfg WGConfig, users []db.User) (string, error) {
-	var sb strings.Builder
+// ==================== WireGuard 控制（使用 wgctrl 库，不依赖系统 wg 命令）====================
 
-	sb.WriteString(fmt.Sprintf("[Interface]\n"))
-	sb.WriteString(fmt.Sprintf("PrivateKey = %s\n", cfg.PrivateKey))
-	sb.WriteString(fmt.Sprintf("Address = %s\n", cfg.Address))
-	sb.WriteString(fmt.Sprintf("ListenPort = %d\n", cfg.ListenPort))
-	if cfg.MTU > 0 {
-		sb.WriteString(fmt.Sprintf("MTU = %d\n", cfg.MTU))
-	}
-	if cfg.DNS != "" {
-		sb.WriteString(fmt.Sprintf("DNS = %s\n", cfg.DNS))
-	}
-	if cfg.PostUp != "" {
-		sb.WriteString(fmt.Sprintf("PostUp = %s\n", cfg.PostUp))
-	}
-	if cfg.PostDown != "" {
-		sb.WriteString(fmt.Sprintf("PostDown = %s\n", cfg.PostDown))
-	}
+// newClient 创建 wgctrl 客户端
+func newClient() (*wgctrl.Client, error) {
+	return wgctrl.New()
+}
 
+// ApplyConfig 通过 wgctrl 库将配置应用到 WireGuard 接口
+func ApplyConfig(cfg WGConfig, users []db.User) error {
+	client, err := newClient()
+	if err != nil {
+		return fmt.Errorf("wgctrl new: %w", err)
+	}
+	defer client.Close()
+
+	var peers []wgtypes.PeerConfig
 	for _, u := range users {
 		if !u.Enabled {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("\n[Peer]\n"))
-		sb.WriteString(fmt.Sprintf("PublicKey = %s\n", u.PublicKey))
-		if u.PresharedKey != "" {
-			sb.WriteString(fmt.Sprintf("PresharedKey = %s\n", u.PresharedKey))
+		pubKey, _ := wgtypes.ParseKey(u.PublicKey)
+		peerCfg := wgtypes.PeerConfig{
+			PublicKey: pubKey,
 		}
-		sb.WriteString(fmt.Sprintf("AllowedIPs = %s\n", u.AllowedIPs))
+		if u.PresharedKey != "" {
+			psk, _ := wgtypes.ParseKey(u.PresharedKey)
+			peerCfg.PresharedKey = &psk
+		}
+		if u.AllowedIPs != "" {
+			for _, cidr := range strings.Split(u.AllowedIPs, ",") {
+				cidr = strings.TrimSpace(cidr)
+				_, ipNet, err := net.ParseCIDR(cidr)
+				if err == nil {
+					peerCfg.AllowedIPs = append(peerCfg.AllowedIPs, *ipNet)
+				}
+			}
+		}
+		peers = append(peers, peerCfg)
 	}
 
-	configContent := sb.String()
-
-	// Write to temp file and apply
-	cmd := exec.Command("wg", "setconf", cfg.InterfaceName, "/dev/stdin")
-	cmd.Stdin = strings.NewReader(configContent)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return configContent, fmt.Errorf("apply wg config: %s: %w", string(output), err)
+	privKey, _ := wgtypes.ParseKey(cfg.PrivateKey)
+	listenPort := cfg.ListenPort
+	config := wgtypes.Config{
+		PrivateKey: &privKey,
+		ListenPort: &listenPort,
+		Peers:      peers,
+		ReplacePeers: true,
 	}
 
-	return configContent, nil
+	return client.ConfigureDevice(cfg.InterfaceName, config)
 }
 
-// InitInterface initializes the WireGuard interface.
+// InitInterface 初始化 WireGuard 接口
 func InitInterface() error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
 	}
 
-	// Check if interface already exists
 	iface := cfg.InterfaceName
 	_, err = net.InterfaceByName(iface)
 	if err == nil {
-		// Interface exists, just apply config
+		// 接口已存在，直接应用配置
 		users, err := db.ListUsers()
 		if err != nil {
 			return err
 		}
-		_, err = WriteConfigFile(*cfg, users)
-		return err
+		return ApplyConfig(*cfg, users)
 	}
 
-	// Create interface using ip link
+	// 创建接口
 	cmds := []string{
 		fmt.Sprintf("ip link add dev %s type wireguard", iface),
 		fmt.Sprintf("ip address add dev %s %s", iface, cfg.Address),
 		fmt.Sprintf("ip link set dev %s up", iface),
-		fmt.Sprintf("ip link set dev %s mtu %d", iface, cfg.MTU),
+	}
+	if cfg.MTU > 0 {
+		cmds = append(cmds, fmt.Sprintf("ip link set dev %s mtu %d", iface, cfg.MTU))
 	}
 
 	for _, c := range cmds {
@@ -236,95 +241,152 @@ func InitInterface() error {
 		}
 	}
 
-	// Apply config
+	// 应用 WireGuard 配置
 	users, err := db.ListUsers()
 	if err != nil {
 		return err
 	}
-	_, err = WriteConfigFile(*cfg, users)
-	return err
+	return ApplyConfig(*cfg, users)
 }
 
-// RemovePeer removes a peer from the WireGuard interface.
+// RemovePeer 从 WireGuard 接口移除对等端
 func RemovePeer(interfaceName, publicKey string) error {
-	cmd := exec.Command("wg", "set", interfaceName, "peer", publicKey, "remove")
-	output, err := cmd.CombinedOutput()
+	client, err := newClient()
 	if err != nil {
-		return fmt.Errorf("remove peer: %s: %w", string(output), err)
+		return fmt.Errorf("wgctrl new: %w", err)
 	}
-	return nil
+	defer client.Close()
+
+	pubKey, err := wgtypes.ParseKey(publicKey)
+	if err != nil {
+		return fmt.Errorf("parse key: %w", err)
+	}
+
+	config := wgtypes.Config{
+		Peers: []wgtypes.PeerConfig{{
+			PublicKey: pubKey,
+			Remove:    true,
+		}},
+	}
+	return client.ConfigureDevice(interfaceName, config)
 }
 
-// GetPeers returns the current peers from the WireGuard interface.
+// GetPeers 获取当前 WireGuard 接口的所有对等端信息
 func GetPeers(interfaceName string) ([]PeerInfo, error) {
-	cmd := exec.Command("wg", "show", interfaceName, "dump")
-	output, err := cmd.Output()
+	client, err := newClient()
 	if err != nil {
-		return nil, fmt.Errorf("wg show: %w", err)
+		// wgctrl 不可用时尝试通过 sysfs 读取（降级方案）
+		return getPeersFallback(interfaceName)
+	}
+	defer client.Close()
+
+	device, err := client.Device(interfaceName)
+	if err != nil {
+		return nil, fmt.Errorf("get device: %w", err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) < 2 {
-		return nil, nil
-	}
-
-	// First line is interface info, rest are peers
 	var peers []PeerInfo
-	for _, line := range lines[1:] {
-		parts := strings.Fields(line)
-		if len(parts) < 5 {
-			continue
+	for _, p := range device.Peers {
+		var allowedIPs []string
+		for _, aip := range p.AllowedIPs {
+			allowedIPs = append(allowedIPs, aip.String())
 		}
-		// private_key public_key listen_port endpoint allowed_ips latest_handshake transfer_rx transfer_tx persistent_keepalive
-		peer := PeerInfo{
-			PublicKey:  parts[0],
-			Endpoint:   parts[2],
-			AllowedIPs: parts[3],
-		}
-		fmt.Sscanf(parts[5], "%d", &peer.LatestHandshake)
-		fmt.Sscanf(parts[6], "%d", &peer.TransferRx)
-		fmt.Sscanf(parts[7], "%d", &peer.TransferTx)
-
-		peers = append(peers, peer)
+		peers = append(peers, PeerInfo{
+			PublicKey:       p.PublicKey.String(),
+			Endpoint:        p.Endpoint.String(),
+			AllowedIPs:      strings.Join(allowedIPs, ","),
+			LatestHandshake: p.LastHandshakeTime.Unix(),
+			TransferRx:      p.ReceiveBytes,
+			TransferTx:      p.TransmitBytes,
+			PersistentKeepalive: int(p.PersistentKeepaliveInterval.Seconds()),
+		})
 	}
 	return peers, nil
 }
 
-// PeerInfo holds WireGuard peer information.
-type PeerInfo struct {
-	PublicKey       string `json:"publicKey"`
-	Endpoint        string `json:"endpoint"`
-	AllowedIPs      string `json:"allowedIPs"`
-	LatestHandshake int64  `json:"latestHandshake"`
-	TransferRx      int64  `json:"transferRx"`
-	TransferTx      int64  `json:"transferTx"`
+// getPeersFallback 降级方案：通过 /proc/net/wireguard 读取
+func getPeersFallback(interfaceName string) ([]PeerInfo, error) {
+	data, err := os.ReadFile("/proc/net/wireguard")
+	if err != nil {
+		return nil, err
+	}
+	return parseWireguardProc(string(data), interfaceName)
 }
 
-// GetInterfaceTransfer gets total transfer for the interface.
-func GetInterfaceTransfer(interfaceName string) (rxBytes, txBytes int64, err error) {
-	cmd := exec.Command("wg", "show", interfaceName, "transfer")
-	output, err := cmd.Output()
-	if err != nil {
-		return 0, 0, fmt.Errorf("wg show transfer: %w", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) > 0 {
-		parts := strings.Fields(lines[0])
-		if len(parts) >= 3 {
-			fmt.Sscanf(parts[1], "%d", &txBytes)
-			fmt.Sscanf(parts[2], "%d", &rxBytes)
+func parseWireguardProc(data, iface string) ([]PeerInfo, error) {
+	var peers []PeerInfo
+	lines := strings.Split(data, "\n")
+	inTarget := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, iface+":") {
+			inTarget = true
+			continue
+		}
+		if inTarget {
+			if line == "" {
+				break
+			}
+			// 解析对等端行
+			// 格式: public_key=xxx endpoint=xxx allowed_ips=xxx latest_handshake=xxx transfer=xxx persistent_keepalive=xxx
+			peer := PeerInfo{}
+			parts := strings.Fields(line)
+			for _, part := range parts {
+				kv := strings.SplitN(part, "=", 2)
+				if len(kv) != 2 {
+					continue
+				}
+				switch kv[0] {
+				case "public_key":
+					peer.PublicKey = kv[1]
+				case "endpoint":
+					peer.Endpoint = kv[1]
+				case "allowed_ips":
+					peer.AllowedIPs = kv[1]
+				case "latest_handshake":
+					fmt.Sscanf(kv[1], "%d", &peer.LatestHandshake)
+				case "transfer":
+					fmt.Sscanf(kv[1], "%d", &peer.TransferRx)
+				}
+			}
+			if peer.PublicKey != "" {
+				peers = append(peers, peer)
+			}
 		}
 	}
-	return
+	return peers, nil
 }
 
-// DecodeBase64 decodes a base64 string.
-func DecodeBase64(s string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(s)
+// PeerInfo 对等端信息
+type PeerInfo struct {
+	PublicKey           string `json:"publicKey"`
+	Endpoint            string `json:"endpoint"`
+	AllowedIPs          string `json:"allowedIPs"`
+	LatestHandshake     int64  `json:"latestHandshake"`
+	TransferRx          int64  `json:"transferRx"`
+	TransferTx          int64  `json:"transferTx"`
+	PersistentKeepalive int    `json:"persistentKeepalive"`
 }
 
-// IsKernelModuleLoaded checks if the WireGuard kernel module is loaded.
+// GetInterfaceTransfer 获取接口总流量（通过 sysfs，不依赖 wg 命令）
+func GetInterfaceTransfer(interfaceName string) (rxBytes, txBytes int64, err error) {
+	rx, errRx := readSysfsFile(fmt.Sprintf("/sys/class/net/%s/statistics/rx_bytes", interfaceName))
+	tx, errTx := readSysfsFile(fmt.Sprintf("/sys/class/net/%s/statistics/tx_bytes", interfaceName))
+	if errRx != nil || errTx != nil {
+		return 0, 0, fmt.Errorf("read sysfs stats: rx=%v tx=%v", errRx, errTx)
+	}
+	return rx, tx, nil
+}
+
+func readSysfsFile(path string) (int64, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+}
+
+// IsKernelModuleLoaded 检查 WireGuard 内核模块是否加载
 func IsKernelModuleLoaded() bool {
 	data, err := os.ReadFile("/proc/modules")
 	if err != nil {
@@ -333,7 +395,7 @@ func IsKernelModuleLoaded() bool {
 	return strings.Contains(string(data), "wireguard")
 }
 
-// GetKernelVersion returns the kernel version.
+// GetKernelVersion 返回内核版本
 func GetKernelVersion() string {
 	data, err := os.ReadFile("/proc/version")
 	if err != nil {
@@ -342,7 +404,7 @@ func GetKernelVersion() string {
 	return strings.TrimSpace(string(data))
 }
 
-// IsInterfaceUp checks if the WireGuard interface is up.
+// IsInterfaceUp 检查 WireGuard 接口是否启用
 func IsInterfaceUp(name string) bool {
 	data, err := os.ReadFile("/sys/class/net/" + name + "/carrier")
 	if err != nil {

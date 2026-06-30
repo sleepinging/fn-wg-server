@@ -19,7 +19,7 @@ IP和网段默认为192.168.5.10/24开始（可配置），添加用户时自动
 
 技术架构
 使用sqlite3数据库存储用户数据和历史
-前端使用react+ts, 后端使用golang, 使用wgctrl-go库控制wireguard
+前端使用react+ts, 后端使用golang, 使用wgctrl-go库控制wireguard，不要用wg系统调用
 使用 CGI 架构，避免额外端口
 
 注意我在国内，如果要涉及到下载，尽量使用国内源

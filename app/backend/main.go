@@ -17,7 +17,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.21"
+const Version = "1.0.22"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -207,13 +207,7 @@ func writeCGIError(status int, msg string) {
 }
 
 func runDaemon(dataDir string) {
-	// Check if WireGuard is configured
-	interfaceName := "wg0"
-	if cfg, err := db.GetAllConfig(); err == nil {
-		if name, ok := cfg["interface_name"]; ok && name != "" {
-			interfaceName = name
-		}
-	}
+	interfaceName := loadInterfaceName()
 
 	mon := daemon.NewMonitor(interfaceName, dataDir)
 	mon.Start()
@@ -257,17 +251,21 @@ func GetAppDest() string {
 
 // isWGRunning checks if the WireGuard interface is up.
 func isWGRunning() bool {
-	interfaceName := "wg0"
-	if cfg, err := db.GetAllConfig(); err == nil {
-		if name, ok := cfg["interface_name"]; ok && name != "" {
-			interfaceName = name
-		}
-	}
+	interfaceName := loadInterfaceName()
 	data, err := os.ReadFile("/sys/class/net/" + interfaceName + "/carrier")
 	if err != nil {
 		return false
 	}
 	return strings.TrimSpace(string(data)) == "1"
+}
+
+func loadInterfaceName() string {
+	if cfg, err := db.GetAllConfig(); err == nil {
+		if name, ok := cfg["interface_name"]; ok && name != "" {
+			return name
+		}
+	}
+	return wg.DefaultConfig().InterfaceName
 }
 
 
