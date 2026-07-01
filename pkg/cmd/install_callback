@@ -39,6 +39,29 @@ EOF
 sysctl -p /etc/sysctl.d/90-wg-server.conf 2>/dev/null || true
 log_msg "IP forwarding enabled"
 
+# 安装守护进程系统服务（自动拉起 + 开机自启）
+SERVICE_FILE="/etc/systemd/system/wg-server-daemon.service"
+cat > "${SERVICE_FILE}" <<SERVEOF
+[Unit]
+Description=WireGuard Server Monitoring Daemon
+After=network.target
+Before=trim_http_cgi.service
+
+[Service]
+Type=simple
+ExecStart=${BINARY} daemon
+Environment=TRIM_PKGVAR=${PKG_VAR}
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+SERVEOF
+chmod 644 "${SERVICE_FILE}"
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable wg-server-daemon.service 2>/dev/null && log_msg "wg-server-daemon 服务已启用" || log_msg "启用 wg-server-daemon 服务失败"
+systemctl restart wg-server-daemon.service 2>/dev/null && log_msg "wg-server-daemon 已启动" || log_msg "启动 wg-server-daemon 失败"
+
 # 让 fnOS 的 CGI 服务重新加载
 systemctl restart trim_http_cgi.service 2>/dev/null && log_msg "restarted trim_http_cgi" || log_msg "restart trim_http_cgi failed (可能无权限，重启系统后生效)"
 

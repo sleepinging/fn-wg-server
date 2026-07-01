@@ -32999,6 +32999,23 @@ const System = ({ systemInfo, wgKernel, refreshInterval, onRefreshIntervalChange
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "服务状态" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "WireGuard 接口" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${(systemInfo == null ? void 0 : systemInfo.wgRunning) ? "online" : "offline"}` }),
+            (systemInfo == null ? void 0 : systemInfo.wgRunning) ? "已启用" : "未启用"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "监控守护进程" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${(systemInfo == null ? void 0 : systemInfo.monitorRunning) ? "online" : "offline"}` }),
+            (systemInfo == null ? void 0 : systemInfo.monitorRunning) ? "运行中" : "未运行"
+          ] })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-card", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "WireGuard 内核状态" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-row", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "内核模块" }),

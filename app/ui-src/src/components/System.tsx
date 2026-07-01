@@ -86,6 +86,24 @@ const System: React.FC<Props> = ({ systemInfo, wgKernel, refreshInterval, onRefr
         </div>
 
         <div className="info-card">
+          <h4>服务状态</h4>
+          <div className="info-row">
+            <label>WireGuard 接口</label>
+            <span>
+              <span className={`status-dot ${systemInfo?.wgRunning ? 'online' : 'offline'}`} />
+              {systemInfo?.wgRunning ? '已启用' : '未启用'}
+            </span>
+          </div>
+          <div className="info-row">
+            <label>监控守护进程</label>
+            <span>
+              <span className={`status-dot ${systemInfo?.monitorRunning ? 'online' : 'offline'}`} />
+              {systemInfo?.monitorRunning ? '运行中' : '未运行'}
+            </span>
+          </div>
+        </div>
+
+        <div className="info-card">
           <h4>WireGuard 内核状态</h4>
           <div className="info-row">
             <label>内核模块</label>

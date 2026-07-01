@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.41"
+var Version = "1.0.43"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -1018,6 +1018,11 @@ func getSystemInfo() map[string]interface{} {
 
 	// Process info
 	info["processMemory"] = getProcessMemory()
+
+	// WireGuard 接口状态
+	interfaceName := getInterfaceName()
+	info["wgRunning"] = wg.IsInterfaceUp(interfaceName)
+	info["monitorRunning"] = isMonitorRunning()
 
 	return info
 }

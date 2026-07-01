@@ -19,7 +19,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.41"
+const Version = "1.0.43"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -240,18 +240,40 @@ func handleCommand(cmd string) {
 }
 
 // startDaemon 启动守护进程（从 CGI 调用时自动启动）
+// 使用 Setpgid 脱离 CGI 进程组，防止 CGI 退出时守护进程被杀死
 func startDaemon(dataDir string) {
 	exe, err := os.Executable()
 	if err != nil {
 		log.Printf("startDaemon: cannot get executable: %v", err)
 		return
 	}
+
+	// 日志文件
+	logFile := filepath.Join(dataDir, "info.log")
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("startDaemon: cannot open log: %v", err)
+		return
+	}
+
 	cmd := exec.Command(exe, "daemon")
 	cmd.Env = append(os.Environ(), "TRIM_PKGVAR="+dataDir)
+	cmd.Stdout = f
+	cmd.Stderr = f
+	// 新建进程组，脱离 CGI 进程
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 	if err := cmd.Start(); err != nil {
+		f.Close()
 		log.Printf("startDaemon: failed to start: %v", err)
 		return
 	}
+	f.Close()
+
+	// 写 PID 文件（与生命周期脚本一致）
+	pidPath := filepath.Join(dataDir, "monitor.pid")
+	os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0644)
+
 	log.Printf("startDaemon: daemon started (PID: %d)", cmd.Process.Pid)
 }
 
