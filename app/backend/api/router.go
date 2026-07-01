@@ -48,7 +48,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.51"
+var Version = "1.0.52"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -684,23 +684,28 @@ func getConfig(w http.ResponseWriter, r *http.Request) {
 	if v, ok := all["auto_start"]; ok {
 		autoStart = v
 	}
+	flushInterval := "10"
+	if v, ok := all["bandwidth_flush_interval"]; ok {
+		flushInterval = v
+	}
 
-	// 检测当前公网 IP 作为域名提示
 	currentIP := getExternalIP()
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"wireguard":            cfg,
-		"historyRetentionDays": historyDays,
-		"autoStart":            autoStart,
-		"detectedIP":           currentIP,
+		"wireguard":              cfg,
+		"historyRetentionDays":   historyDays,
+		"autoStart":              autoStart,
+		"bandwidthFlushInterval": flushInterval,
+		"detectedIP":             currentIP,
 	})
 }
 
 func updateConfig(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Wireguard            *wg.WGConfig `json:"wireguard"`
-		HistoryRetentionDays string       `json:"historyRetentionDays"`
-		AutoStart            string       `json:"autoStart"`
+		Wireguard              *wg.WGConfig `json:"wireguard"`
+		HistoryRetentionDays   string       `json:"historyRetentionDays"`
+		AutoStart              string       `json:"autoStart"`
+		BandwidthFlushInterval string       `json:"bandwidthFlushInterval"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON")
@@ -720,6 +725,9 @@ func updateConfig(w http.ResponseWriter, r *http.Request) {
 	if input.AutoStart != "" {
 		db.SetConfig("auto_start", input.AutoStart)
 		setAutoStart(input.AutoStart == "true")
+	}
+	if input.BandwidthFlushInterval != "" {
+		db.SetConfig("bandwidth_flush_interval", input.BandwidthFlushInterval)
 	}
 
 	// Reapply WireGuard config

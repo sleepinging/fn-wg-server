@@ -48,6 +48,11 @@ func (m *Monitor) Start() {
 	m.wg.Add(1)
 	m.running = true
 
+	// 初始化带宽缓存写入器（减少磁盘写入频率）
+	flushInterval := db.GetConfigFlushInterval()
+	db.InitBandwidthBuffer(flushInterval)
+	log.Printf("Bandwidth buffer flush interval: %ds", flushInterval)
+
 	// Write PID file
 	pid := os.Getpid()
 	os.WriteFile(m.pidFile, []byte(fmt.Sprintf("%d", pid)), 0644)
@@ -66,6 +71,8 @@ func (m *Monitor) Stop() {
 		close(m.stopCh)
 		m.wg.Wait()
 		m.running = false
+		// 最后一次刷入缓冲区数据
+		db.StopBandwidthBuffer()
 		os.Remove(m.pidFile)
 		log.Println("Bandwidth monitor stopped")
 	}
@@ -111,10 +118,8 @@ func (m *Monitor) collect() {
 	rxSpeed := math.Max(0, float64(currentRx-m.lastRx)/elapsed)
 	txSpeed := math.Max(0, float64(currentTx-m.lastTx)/elapsed)
 
-	// Save global bandwidth point
-	if err := db.SaveGlobalBandwidthPoint(currentRx, currentTx, rxSpeed, txSpeed); err != nil {
-		log.Printf("Failed to save global bandwidth: %v", err)
-	}
+	// Save global bandwidth point（缓存写入，非实时入库）
+	db.BufferedSaveGlobalBandwidthPoint(currentRx, currentTx, rxSpeed, txSpeed)
 
 	m.lastRx = currentRx
 	m.lastTx = currentTx
@@ -232,9 +237,8 @@ func (m *Monitor) collectPerUserBandwidth() {
 		lastUserRx[userID] = peer.TransferRx
 		lastUserTx[userID] = peer.TransferTx
 
-		if err := db.SaveBandwidthPoint(userID, peer.TransferRx, peer.TransferTx, rxSpeed, txSpeed); err != nil {
-			log.Printf("Failed to save user bandwidth (user %d): %v", userID, err)
-		}
+		// 缓存写入，非实时入库
+		db.BufferedSaveBandwidthPoint(userID, peer.TransferRx, peer.TransferTx, rxSpeed, txSpeed)
 	}
 	lastUserTime = now
 }
