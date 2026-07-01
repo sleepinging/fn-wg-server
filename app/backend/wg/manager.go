@@ -273,16 +273,19 @@ func RemovePeer(interfaceName, publicKey string) error {
 
 // GetPeers 获取当前 WireGuard 接口的所有对等端信息
 func GetPeers(interfaceName string) ([]PeerInfo, error) {
+	// CGI 进程通常没有 CAP_NET_ADMIN，无法使用 wgctrl 库
+	// 此时静默返回空列表，不影响其他功能
 	client, err := newClient()
 	if err != nil {
-		// wgctrl 不可用时尝试通过 sysfs 读取（降级方案）
-		return getPeersFallback(interfaceName)
+		// wgctrl 不可用（无权限），返回空列表
+		return []PeerInfo{}, nil
 	}
 	defer client.Close()
 
 	device, err := client.Device(interfaceName)
 	if err != nil {
-		return nil, fmt.Errorf("get device: %w", err)
+		// 接口不存在或无权访问，返回空列表
+		return []PeerInfo{}, nil
 	}
 
 	var peers []PeerInfo

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"wg-server/db"
+	"wg-server/daemon"
 	"wg-server/wg"
 )
 
@@ -45,7 +46,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.24"
+var Version = "1.0.30"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -160,7 +161,10 @@ func listUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Get peer info for online status
 	interfaceName := getInterfaceName()
-	peers, _ := wg.GetPeers(interfaceName)
+	peers, peerErr := wg.GetPeers(interfaceName)
+	if peerErr != nil {
+		peers = []wg.PeerInfo{}
+	}
 	peerMap := make(map[string]wg.PeerInfo)
 	for _, p := range peers {
 		peerMap[p.PublicKey] = p
@@ -346,7 +350,10 @@ func getUser(w http.ResponseWriter, r *http.Request, userID int) {
 
 	// Get peer info
 	interfaceName := getInterfaceName()
-	peers, _ := wg.GetPeers(interfaceName)
+	peers, peerErr := wg.GetPeers(interfaceName)
+	if peerErr != nil {
+		peers = []wg.PeerInfo{}
+	}
 	for _, p := range peers {
 		if p.PublicKey == user.PublicKey {
 			user.RxBytes = p.TransferRx
@@ -468,6 +475,9 @@ func handleUserStats(w http.ResponseWriter, r *http.Request, userID int) {
 
 	interfaceName := getInterfaceName()
 	peers, _ := wg.GetPeers(interfaceName)
+	if peers == nil {
+		peers = []wg.PeerInfo{}
+	}
 
 	stats := map[string]interface{}{
 		"username":   user.Username,
@@ -558,7 +568,10 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get peers for online count
-	peers, _ := wg.GetPeers(interfaceName)
+	peers, peerErr := wg.GetPeers(interfaceName)
+	if peerErr != nil {
+		peers = []wg.PeerInfo{}
+	}
 	onlineCount := 0
 	for _, p := range peers {
 		if p.LatestHandshake > 0 {
@@ -1043,15 +1056,13 @@ func execCommand(name string, args ...string) string {
 }
 
 func applyWGConfig() error {
-	cfg, err := wg.LoadConfig()
-	if err != nil {
-		return err
+	// CGI 进程没有 CAP_NET_ADMIN 权限，无法直接配置 WireGuard。
+	// 通过触发文件告知守护进程（以 root 运行）去执行配置。
+	dataDir := os.Getenv("TRIM_PKGVAR")
+	if dataDir == "" {
+		return fmt.Errorf("TRIM_PKGVAR not set")
 	}
-	users, err := db.ListUsers()
-	if err != nil {
-		return err
-	}
-	return wg.ApplyConfig(*cfg, users)
+	return daemon.WriteConfigTrigger(dataDir, "apply")
 }
 
 func isMonitorRunning() bool {

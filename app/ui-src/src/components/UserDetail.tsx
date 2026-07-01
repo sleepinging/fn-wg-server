@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { getUser, getUserStats, getUserTraffic, getUserConfig, User } from '../api'
+import HistoryTable from './HistoryTable'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 interface Props {
@@ -12,8 +13,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [stats, setStats] = useState<any>(null)
   const [traffic, setTraffic] = useState<any>(null)
   const [timeRange, setTimeRange] = useState('1h')
-  const [showConfig, setShowConfig] = useState(false)
-  const [clientConfig, setClientConfig] = useState<any>(null)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportConfig, setExportConfig] = useState<any>(null)
 
   useEffect(() => {
     loadData()
@@ -63,20 +64,20 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId)
-      setClientConfig(data)
-      setShowConfig(true)
+      setExportConfig(data)
+      setShowExportModal(true)
     } catch (e) {
       alert('获取配置失败')
     }
   }
 
   const downloadConfig = () => {
-    if (!clientConfig) return
-    const blob = new Blob([clientConfig.config], { type: 'text/plain;charset=utf-8' })
+    if (!exportConfig) return
+    const blob = new Blob([exportConfig.config], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = clientConfig.filename || 'wg-client.conf'
+    a.download = exportConfig.filename || 'wg-client.conf'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -181,101 +182,41 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
 
       <div className="history-section">
         <h3>历史记录</h3>
-        <HistoryTable userId={userId} />
+        <HistoryTable uid={userId} />
       </div>
-    </div>
-  )
-}
-
-const HistoryTable: React.FC<{ userId: number }> = ({ userId }) => {
-  const [history, setHistory] = useState<any[]>([])
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-
-  useEffect(() => {
-    loadHistory()
-  }, [userId, page])
-
-  const loadHistory = async () => {
-    try {
-      const { default: api } = await import('../api')
-      const data = await api.getUserHistory(userId, page, 20)
-      setHistory(data.data)
-      setTotal(data.total)
-    } catch (e) {
-      console.error('Failed to load history', e)
-    }
-  }
-
-  return (
-    <div>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>内部IP</th>
-            <th>外部IP</th>
-            <th>上线时间</th>
-            <th>下线时间</th>
-            <th>下载流量</th>
-            <th>上传流量</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(history || []).map((h: any) => (
-            <tr key={h.id}>
-              <td>{h.internalIP}</td>
-              <td className="ip">{h.externalIP}</td>
-              <td>{h.connectedAt}</td>
-              <td>{h.disconnectedAt || '在线中'}</td>
-              <td>{formatBytesSimple(h.rxBytes)}</td>
-              <td>{formatBytesSimple(h.txBytes)}</td>
-            </tr>
-          ))}
-          {history.length === 0 && (
-            <tr><td colSpan={6} className="empty">暂无历史记录</td></tr>
-          )}
-        </tbody>
-      </table>
-      {total > 20 && (
-        <div className="pagination">
-          <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</button>
-          <span>第 {page} 页 / 共 {Math.ceil(total / 20)} 页</span>
-          <button className="btn btn-sm" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>下一页</button>
-        </div>
-      )}
       {/* 导出配置弹窗 */}
-      {showConfig && clientConfig && (
-        <div className="modal-overlay" onClick={() => setShowConfig(false)}>
+      {showExportModal && exportConfig && (
+        <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
           <div className="modal config-modal" onClick={e => e.stopPropagation()}>
             <h4>客户端配置 - {user?.username}</h4>
             <p className="config-hint">将此配置导入 WireGuard 客户端即可连接</p>
             <div className="config-details">
               <div className="config-row">
                 <label>服务端公钥</label>
-                <code>{clientConfig.serverPublicKey}</code>
+                <code>{exportConfig.serverPublicKey}</code>
               </div>
               <div className="config-row">
                 <label>服务端地址</label>
-                <code>{clientConfig.serverEndpoint}</code>
+                <code>{exportConfig.serverEndpoint}</code>
               </div>
               <div className="config-row">
                 <label>客户端IP</label>
-                <code>{clientConfig.clientAddress}</code>
+                <code>{exportConfig.clientAddress}</code>
               </div>
               <div className="config-row">
                 <label>DNS</label>
-                <code>{clientConfig.clientDNS}</code>
+                <code>{exportConfig.clientDNS}</code>
               </div>
             </div>
             <textarea
               className="config-textarea"
               readOnly
-              value={clientConfig.config}
+              value={exportConfig.config}
               rows={12}
               onClick={e => (e.target as HTMLTextAreaElement).select()}
             />
             <div className="modal-actions">
-              <button className="btn" onClick={() => setShowConfig(false)}>关闭</button>
+              <button className="btn" onClick={() => setShowExportModal(false)}>关闭</button>
               <button className="btn btn-primary" onClick={downloadConfig}>
                 下载 .conf 文件
               </button>
@@ -285,14 +226,6 @@ const HistoryTable: React.FC<{ userId: number }> = ({ userId }) => {
       )}
     </div>
   )
-}
-
-function formatBytesSimple(bytes: number): string {
-  if (!bytes) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 function getStartTime(range: string): string {
