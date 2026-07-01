@@ -1,5 +1,5 @@
 appname               = wg-server
-version               = 1.0.38
+version               = 1.0.39
 display_name          = WireGuard 服务端
 desc                  = 异地组网 WireGuard 服务端管理系统。支持用户管理、实时带宽监控、流量统计、历史记录、配置备份恢复。基于 Go 开发，React 前端。
 arch                  = x86_64

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,7 +18,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.38"
+const Version = "1.0.39"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -38,15 +39,17 @@ func main() {
 	// Set version for API module
 	api.Version = Version
 
-	// Initialize database
-	if err := db.Init(dataDir); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to init db: %v\n", err)
-		os.Exit(1)
-	}
-	defer db.Close()
+	// 设置对等端缓存目录
+	wg.SetPeersCacheDir(dataDir)
 
 	// Check for daemon mode
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {
+		// 守护进程模式：初始化 DB，启动本地 API 服务
+		if err := db.Init(dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to init db: %v\n", err)
+			os.Exit(1)
+		}
+		defer db.Close()
 		runDaemon(dataDir)
 		return
 	}
@@ -57,17 +60,20 @@ func main() {
 		return
 	}
 
-	// Set peers cache directory (shared between daemon and CGI)
-	wg.SetPeersCacheDir(dataDir)
-
 	// Check if running as CGI
 	if os.Getenv("GATEWAY_INTERFACE") != "" {
-		// CGI mode: manually handle the request
+		// CGI 模式：不初始化 DB，直接转发请求给守护进程
 		handleCGI()
 		return
 	}
 
 	// Direct HTTP server mode (for development/testing)
+	// 开发模式才初始化 DB
+	if err := db.Init(dataDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to init db: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 	port := "8080"
 	if p := os.Getenv("PORT"); p != "" {
 		port = p
@@ -85,120 +91,68 @@ func handleCGI() {
 		method = "GET"
 	}
 
-	// The URL path: use PATH_INFO, fall back to SCRIPT_NAME
 	pathInfo := os.Getenv("PATH_INFO")
 	scriptName := os.Getenv("SCRIPT_NAME")
 	queryString := os.Getenv("QUERY_STRING")
 
-	// trim_http_cgi 把完整路径放进 PATH_INFO（例如 /cgi/.../index.cgi/api/stats/history）
-	// 需要提取 index.cgi 后面的部分作为实际 URL 路径
+	// 从 PATH_INFO 提取 /api/... 路径
 	urlPath := pathInfo
 	if idx := strings.Index(urlPath, "/index.cgi/"); idx >= 0 {
-		urlPath = urlPath[idx+len("/index.cgi"):] // 保留 /api/stats/history 格式
+		urlPath = urlPath[idx+len("/index.cgi"):]
 	} else if idx := strings.Index(urlPath, "/index.cgi"); idx >= 0 {
 		urlPath = urlPath[idx+len("/index.cgi"):]
 		if urlPath == "" {
 			urlPath = "/"
 		}
 	} else if urlPath == "" {
-		// If empty, try SCRIPT_NAME
 		urlPath = scriptName
 		if urlPath == "" {
 			urlPath = "/"
 		}
 	}
 
-	// Build the full URL
-	fullURL := urlPath
-	if queryString != "" {
-		fullURL = urlPath + "?" + queryString
-	}
-
-	// Read body for POST/PUT requests
+	// 读取请求体
 	var bodyReader io.Reader
 	contentLength := os.Getenv("CONTENT_LENGTH")
 	if contentLength != "" && contentLength != "0" {
 		bodyReader = os.Stdin
 	}
 
-	// Create a minimal HTTP request
-	req, err := http.NewRequest(method, fullURL, bodyReader)
+	contentType := os.Getenv("CONTENT_TYPE")
+
+	// 转发到守护进程的本地 API 服务
+	dataDir := os.Getenv("TRIM_PKGVAR")
+	if dataDir == "" {
+		home, _ := os.UserHomeDir()
+		dataDir = filepath.Join(home, ".wg-server")
+	}
+
+	statusCode, respHeaders, respBody, err := daemon.ProxyToDaemon(dataDir, method, urlPath, queryString, bodyReader, contentType)
 	if err != nil {
-		writeCGIError(500, "Failed to create request: "+err.Error())
+		log.Printf("ProxyToDaemon error: %v (url=%s)", err, urlPath)
+		writeCGIError(502, "daemon unavailable")
 		return
 	}
 
-	// Set remote address
-	req.RemoteAddr = os.Getenv("REMOTE_ADDR")
-	if req.RemoteAddr == "" {
-		req.RemoteAddr = "127.0.0.1"
-	}
-
-	// Set content type from environment
-	if ct := os.Getenv("CONTENT_TYPE"); ct != "" {
-		req.Header.Set("Content-Type", ct)
-	}
-
-	// Create a ResponseRecorder to capture the response
-	w := &cgiResponseWriter{
-		header: make(http.Header),
-	}
-
-	// Handle the request
-	router := api.NewRouter()
-	router.ServeHTTP(w, req)
-
-	// Write CGI response to stdout
-	w.flush()
-}
-
-// cgiResponseWriter implements http.ResponseWriter for CGI output.
-type cgiResponseWriter struct {
-	header     http.Header
-	statusCode int
-	body       strings.Builder
-	wroteHeader bool
-}
-
-func (w *cgiResponseWriter) Header() http.Header {
-	return w.header
-}
-
-func (w *cgiResponseWriter) WriteHeader(statusCode int) {
-	if w.wroteHeader {
-		return
-	}
-	w.wroteHeader = true
-	w.statusCode = statusCode
-}
-
-func (w *cgiResponseWriter) Write(data []byte) (int, error) {
-	if !w.wroteHeader {
-		w.WriteHeader(http.StatusOK)
-	}
-	return w.body.Write(data)
-}
-
-func (w *cgiResponseWriter) flush() {
-	// Write status
-	statusText := http.StatusText(w.statusCode)
+	// 写状态行
+	statusText := http.StatusText(statusCode)
 	if statusText == "" {
 		statusText = "Unknown"
 	}
-	fmt.Printf("Status: %d %s\r\n", w.statusCode, statusText)
+	fmt.Printf("Status: %d %s\r\n", statusCode, statusText)
 
-	// Write headers
-	for key, values := range w.header {
+	// 转发响应头
+	for key, values := range respHeaders {
 		for _, value := range values {
 			fmt.Printf("%s: %s\r\n", key, value)
 		}
 	}
 
-	// Empty line to separate headers from body
+	// 空行分隔
 	fmt.Print("\r\n")
 
-	// Write body
-	fmt.Print(w.body.String())
+	// 写响应体
+	os.Stdout.Write(respBody)
 }
 
 func writeCGIError(status int, msg string) {
@@ -212,6 +166,9 @@ func writeCGIError(status int, msg string) {
 func runDaemon(dataDir string) {
 	interfaceName := loadInterfaceName()
 
+	// 启动内部 API 服务（Unix socket），处理所有 DB 操作
+	daemon.StartAPIServer(dataDir, api.NewRouter())
+
 	mon := daemon.NewMonitor(interfaceName, dataDir)
 	mon.Start()
 
@@ -221,6 +178,7 @@ func runDaemon(dataDir string) {
 	<-sigCh
 
 	mon.Stop()
+	daemon.StopAPIServer(dataDir)
 }
 
 func handleCommand(cmd string) {
