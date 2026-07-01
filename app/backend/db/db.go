@@ -155,8 +155,9 @@ func GetConfig(key string) (string, error) {
 	return value, err
 }
 
-// SetConfig sets a config value.
+// SetConfig sets a config value (one-shot, flushes buffer first).
 func SetConfig(key, value string) error {
+	FlushBuffer()
 	_, err := db.Exec(`INSERT INTO config (key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = ?`, key, value, value)
 	return err
@@ -183,17 +184,14 @@ func GetAllConfig() (map[string]string, error) {
 
 // ==================== System Log ====================
 
-// Log inserts a system log entry.
+// Log inserts a system log entry (buffered, flushed with periodic writes).
 func Log(level, message string) {
-	dbLock.RLock()
-	defer dbLock.RUnlock()
 	if db == nil {
 		return
 	}
 	now := time.Now().UnixMilli()
-	db.Exec("INSERT INTO system_log (level, message, created_at) VALUES (?, ?, ?)", level, message, now)
-	// Keep only last 10000 logs to prevent bloat
-	db.Exec("DELETE FROM system_log WHERE id NOT IN (SELECT id FROM system_log ORDER BY id DESC LIMIT 10000)")
+	BufferedExec("INSERT INTO system_log (level, message, created_at) VALUES (?, ?, ?)", level, message, now)
+	BufferedExec("DELETE FROM system_log WHERE id NOT IN (SELECT id FROM system_log ORDER BY id DESC LIMIT 10000)")
 }
 
 // GetLogs retrieves logs with pagination, level filter, and search.

@@ -30,8 +30,9 @@ type User struct {
 	OnlineSince         string  `json:"onlineSince,omitempty"`
 }
 
-// CreateUser inserts a new user.
+// CreateUser inserts a new user (one-shot, flushes buffer first).
 func CreateUser(u User) (int64, error) {
+	FlushBuffer()
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
@@ -116,8 +117,9 @@ func ListUsers() ([]User, error) {
 	return users, nil
 }
 
-// UpdateUser updates a user.
+// UpdateUser updates a user (one-shot, flushes buffer first).
 func UpdateUser(u User) error {
+	FlushBuffer()
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
@@ -130,8 +132,9 @@ func UpdateUser(u User) error {
 	return err
 }
 
-// DeleteUser deletes a user by ID.
+// DeleteUser deletes a user by ID (one-shot, flushes buffer first).
 func DeleteUser(id int) error {
+	FlushBuffer()
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
@@ -232,8 +235,9 @@ func GetUserHistory(userID int, page, pageSize int) ([]map[string]interface{}, i
 	return history, total, nil
 }
 
-// RecordConnection logs a connection event.
+// RecordConnection logs a connection event (one-shot, flushes buffer first).
 func RecordConnection(userID int, username, internalIP, externalIP string) error {
+	FlushBuffer()
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
@@ -244,8 +248,9 @@ func RecordConnection(userID int, username, internalIP, externalIP string) error
 	return err
 }
 
-// UpdateConnectionOnDisconnect updates the disconnect time and traffic.
+// UpdateConnectionOnDisconnect updates disconnect (one-shot, flushes buffer first).
 func UpdateConnectionOnDisconnect(userID int, rx, tx int64) error {
+	FlushBuffer()
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
@@ -264,15 +269,6 @@ func HasActiveConnection(userID int) bool {
 	var count int
 	db.QueryRow("SELECT COUNT(*) FROM connection_log WHERE user_id = ? AND disconnected_at IS NULL", userID).Scan(&count)
 	return count > 0
-}
-
-// UpdateActiveConnectionTraffic updates rx/tx for active connections (periodic, not only on disconnect).
-func UpdateActiveConnectionTraffic(userID int, rx, tx int64) {
-	dbLock.RLock()
-	defer dbLock.RUnlock()
-
-	db.Exec(`UPDATE connection_log SET rx_bytes = ?, tx_bytes = ?
-		WHERE user_id = ? AND disconnected_at IS NULL`, rx, tx, userID)
 }
 
 // GetActiveSessionTraffic returns the session rx/tx for display.

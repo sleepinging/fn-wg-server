@@ -52,8 +52,7 @@ func (m *Monitor) Start() {
 	m.running = true
 
 	flushInterval := db.GetConfigFlushInterval()
-	db.InitBandwidthBuffer(flushInterval)
-	log.Printf("Bandwidth buffer flush interval: %ds", flushInterval)
+	db.StartWriteBuffer(flushInterval)
 
 	pid := os.Getpid()
 	os.WriteFile(m.pidFile, []byte(fmt.Sprintf("%d", pid)), 0644)
@@ -81,7 +80,7 @@ func (m *Monitor) Stop() {
 			log.Println("Monitor goroutine stop timed out")
 		}
 		m.running = false
-		db.StopBandwidthBuffer()
+		db.StopWriteBuffer()
 		os.Remove(m.pidFile)
 		log.Println("Bandwidth monitor stopped")
 	}
