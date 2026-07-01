@@ -30,7 +30,7 @@ func getBandwidthHistoryAgg(userID int, startTs, endTs int64, maxPoints int, agg
 	args := []interface{}{userID}
 
 	if startTs > 0 {
-		query += " AND ts >= ?"
+		query += " AND ts > ?"
 		args = append(args, startTs)
 	}
 	if endTs > 0 {
