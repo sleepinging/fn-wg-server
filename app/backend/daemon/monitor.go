@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -145,7 +146,6 @@ func (m *Monitor) checkConfigTrigger() {
 	
 	switch action {
 	case "apply":
-		// 从数据库读取配置并应用
 		cfg, err := wg.LoadConfig()
 		if err != nil {
 			log.Printf("Load config error: %v", err)
@@ -160,8 +160,16 @@ func (m *Monitor) checkConfigTrigger() {
 			log.Printf("Apply config error: %v", err)
 		}
 	case "init":
+		// 启用 IP 转发 + 初始化 WireGuard 接口
+		exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
 		if err := wg.InitInterface(); err != nil {
 			log.Printf("Init interface error: %v", err)
+		}
+	case "stop":
+		// 关闭 WireGuard 接口
+		if cfg, err := wg.LoadConfig(); err == nil {
+			exec.Command("ip", "link", "set", "dev", cfg.InterfaceName, "down").Run()
+			exec.Command("ip", "link", "delete", "dev", cfg.InterfaceName).Run()
 		}
 	default:
 		log.Printf("Unknown trigger action: %s", action)

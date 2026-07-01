@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.35"
+var Version = "1.0.36"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -448,13 +448,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	// Force remove peer from WireGuard interface
-	interfaceName := getInterfaceName()
-	if err := wg.RemovePeer(interfaceName, user.PublicKey); err != nil {
-		db.Log("WARN", "Failed to remove peer from WireGuard: "+err.Error())
-	}
-
-	// Delete from database
+	// 从数据库删除用户
 	if err := db.DeleteUser(userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete user: "+err.Error())
 		return
@@ -825,30 +819,23 @@ func serviceStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func serviceStart(w http.ResponseWriter, r *http.Request) {
-	// Enable IP forwarding
-	exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
-
-	// 通知守护进程初始化 WireGuard 接口
+	// 通知守护进程初始化 WireGuard 接口（包含 sysctl、ip link、wg 配置等）
+	// 守护进程由生命周期脚本（root）启动，CGI 只负责写触发文件
 	dataDir := os.Getenv("TRIM_PKGVAR")
 	if dataDir != "" {
 		daemon.WriteConfigTrigger(dataDir, "init")
 	}
-
-	// Start monitor daemon
-	startMonitor()
 
 	db.Log("INFO", "WireGuard service started")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "service started"})
 }
 
 func serviceStop(w http.ResponseWriter, r *http.Request) {
-	// Stop monitor daemon
-	stopMonitor()
-
-	// Bring down WireGuard interface
-	interfaceName := getInterfaceName()
-	execCommand("ip", "link", "set", "dev", interfaceName, "down")
-	execCommand("ip", "link", "delete", "dev", interfaceName)
+	// 通知守护进程关闭 WireGuard 接口
+	dataDir := os.Getenv("TRIM_PKGVAR")
+	if dataDir != "" {
+		daemon.WriteConfigTrigger(dataDir, "stop")
+	}
 
 	db.Log("INFO", "WireGuard service stopped")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "service stopped"})
