@@ -9,24 +9,23 @@ import (
 
 // bufferedPoint 带 userID 的带宽数据点
 type bufferedPoint struct {
-	UserID   int
-	RxBytes  int64
-	TxBytes  int64
-	RxSpeed  float64
-	TxSpeed  float64
-	Time     time.Time
+	UserID  int
+	RxBytes int64
+	TxBytes int64
+	RxSpeed float64
+	TxSpeed float64
+	Ts      int64 // 毫秒时间戳
 }
 
 var (
-	bufMu      sync.Mutex
-	pointBuf   []bufferedPoint
-	flushInterval time.Duration // 刷新间隔
-	bufRunning bool
-	bufStopCh  chan struct{}
+	bufMu          sync.Mutex
+	pointBuf       []bufferedPoint
+	flushInterval  time.Duration
+	bufRunning     bool
+	bufStopCh      chan struct{}
 )
 
 // InitBandwidthBuffer 初始化带宽缓存写入器
-// intervalSec: 缓存多少秒后批量写入（默认 10）
 func InitBandwidthBuffer(intervalSec int) {
 	bufMu.Lock()
 	defer bufMu.Unlock()
@@ -57,7 +56,6 @@ func StopBandwidthBuffer() {
 	bufRunning = false
 	bufMu.Unlock()
 
-	// 最后一次刷入，带超时防止卡死
 	done := make(chan struct{}, 1)
 	go func() {
 		flushNow()
@@ -70,7 +68,7 @@ func StopBandwidthBuffer() {
 	}
 }
 
-// BufferedSaveBandwidthPoint 将带宽点写入缓存（替代直接 SaveBandwidthPoint）
+// BufferedSaveBandwidthPoint 将带宽点写入缓存
 func BufferedSaveBandwidthPoint(userID int, rxBytes, txBytes int64, rxSpeed, txSpeed float64) {
 	bufMu.Lock()
 	defer bufMu.Unlock()
@@ -80,7 +78,7 @@ func BufferedSaveBandwidthPoint(userID int, rxBytes, txBytes int64, rxSpeed, txS
 		TxBytes: txBytes,
 		RxSpeed: rxSpeed,
 		TxSpeed: txSpeed,
-		Time:    time.Now(),
+		Ts:      time.Now().UnixMilli(),
 	})
 }
 
@@ -109,20 +107,17 @@ func flushNow() {
 		return
 	}
 	batch := pointBuf
-	pointBuf = nil // 清空
+	pointBuf = nil
 	bufMu.Unlock()
 
-	// 批量写入 DB
 	if err := batchInsert(batch); err != nil {
 		log.Printf("Bandwidth batch insert error: %v", err)
-		// 失败时加回缓冲区？简化处理：丢弃，下个周期再采集
 	}
 
-	// 清理旧数据（每天只执行一次）
 	cleanupOnce()
 }
 
-// batchInsert 批量插入带宽数据
+// batchInsert 批量插入带宽数据（ms 时间戳）
 func batchInsert(batch []bufferedPoint) error {
 	dbLock.RLock()
 	defer dbLock.RUnlock()
@@ -134,7 +129,7 @@ func batchInsert(batch []bufferedPoint) error {
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`INSERT INTO bandwidth_history 
-		(user_id, rx_bytes, tx_bytes, rx_speed, tx_speed, timestamp)
+		(user_id, rx_bytes, tx_bytes, rx_speed, tx_speed, ts)
 		VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare: %w", err)
@@ -142,8 +137,7 @@ func batchInsert(batch []bufferedPoint) error {
 	defer stmt.Close()
 
 	for _, p := range batch {
-		ts := p.Time.Format("2006-01-02 15:04:05")
-		if _, err := stmt.Exec(p.UserID, p.RxBytes, p.TxBytes, p.RxSpeed, p.TxSpeed, ts); err != nil {
+		if _, err := stmt.Exec(p.UserID, p.RxBytes, p.TxBytes, p.RxSpeed, p.TxSpeed, p.Ts); err != nil {
 			return fmt.Errorf("insert: %w", err)
 		}
 	}
@@ -153,7 +147,6 @@ func batchInsert(batch []bufferedPoint) error {
 
 var lastCleanup time.Time
 
-// cleanupOnce 每天删除一次过期数据
 func cleanupOnce() {
 	if time.Since(lastCleanup) < 24*time.Hour {
 		return
@@ -170,40 +163,8 @@ func cleanupOnce() {
 	if days <= 0 {
 		days = 7
 	}
-	cutoff := time.Now().AddDate(0, 0, -days)
-	db.Exec("DELETE FROM bandwidth_history WHERE timestamp < ?", cutoff.Format("2006-01-02 15:04:05"))
-}
-
-// CountBufferedAfter 统计缓冲区中 user_id 在 since 之后的点数
-func CountBufferedAfter(userID int, since time.Time) int {
-	bufMu.Lock()
-	defer bufMu.Unlock()
-	count := 0
-	for _, p := range pointBuf {
-		if (userID == 0 || p.UserID == userID) && p.Time.After(since) {
-			count++
-		}
-	}
-	return count
-}
-
-// GetBufferedPointsAfter 返回缓冲区中 user_id 在 since 之后的点
-func GetBufferedPointsAfter(userID int, since time.Time) []BandwidthPoint {
-	bufMu.Lock()
-	defer bufMu.Unlock()
-	var result []BandwidthPoint
-	for _, p := range pointBuf {
-		if (userID == 0 || p.UserID == userID) && p.Time.After(since) {
-			result = append(result, BandwidthPoint{
-				Timestamp: p.Time.In(time.Local).Format("2006-01-02 15:04:05"),
-				RxBytes:   p.RxBytes,
-				TxBytes:   p.TxBytes,
-				RxSpeed:   p.RxSpeed,
-				TxSpeed:   p.TxSpeed,
-			})
-		}
-	}
-	return result
+	cutoff := time.Now().AddDate(0, 0, -days).UnixMilli()
+	db.Exec("DELETE FROM bandwidth_history WHERE ts < ?", cutoff)
 }
 
 // GetConfigFlushInterval 获取缓存刷新间隔（秒）
@@ -218,4 +179,36 @@ func GetConfigFlushInterval() int {
 		return 10
 	}
 	return sec
+}
+
+// CountBufferedAfter 统计缓冲区中 user_id 在 sinceMs 之后的点数
+func CountBufferedAfter(userID int, sinceMs int64) int {
+	bufMu.Lock()
+	defer bufMu.Unlock()
+	count := 0
+	for _, p := range pointBuf {
+		if (userID == 0 || p.UserID == userID) && p.Ts > sinceMs {
+			count++
+		}
+	}
+	return count
+}
+
+// GetBufferedPointsAfter 返回缓冲区中 user_id 在 sinceMs 之后的点
+func GetBufferedPointsAfter(userID int, sinceMs int64) []BandwidthPoint {
+	bufMu.Lock()
+	defer bufMu.Unlock()
+	var result []BandwidthPoint
+	for _, p := range pointBuf {
+		if (userID == 0 || p.UserID == userID) && p.Ts > sinceMs {
+			result = append(result, BandwidthPoint{
+				Ts:      p.Ts,
+				RxBytes: p.RxBytes,
+				TxBytes: p.TxBytes,
+				RxSpeed: p.RxSpeed,
+				TxSpeed: p.TxSpeed,
+			})
+		}
+	}
+	return result
 }

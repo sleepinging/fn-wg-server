@@ -38,24 +38,24 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
       if (isFirstLoad.current) {
         isFirstLoad.current = false
         // 首次：全量拉取
-        const t = await getUserTraffic(userId, getStartTime(timeRange), '')
+        const t = await getUserTraffic(userId, getStartTime(timeRange), 0)
         setTraffic(t)
         if (t?.chart?.length > 0) {
           chartPoints.current = t.chart.map((p: any) => ({ ...p }))
         }
       } else {
-        // 增量：传 since=最新时间戳
+        // 增量：传 since=最新毫秒时间戳
         const latest = chartPoints.current.length > 0
-          ? chartPoints.current[chartPoints.current.length - 1].timestamp
-          : ''
-        if (latest) {
-          const t = await getUserTraffic(userId, latest, '')
+          ? chartPoints.current[chartPoints.current.length - 1].ts
+          : 0
+        if (latest > 0) {
+          const t = await getUserTraffic(userId, latest, 0)
           if (t?.chart?.length > 0) {
-            const seen = new Set(chartPoints.current.map(p => p.timestamp))
+            const seen = new Set(chartPoints.current.map(p => p.ts))
             for (const p of t.chart) {
-              if (!seen.has(p.timestamp)) {
+              if (!seen.has(p.ts)) {
                 chartPoints.current.push(p)
-                seen.add(p.timestamp)
+                seen.add(p.ts)
               }
             }
             if (chartPoints.current.length > 200) {
@@ -85,7 +85,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  // chartData 从滚动缓冲区读取，增量追加后自动左移
+  // chartData 从滚动缓冲区读取（ts 是毫秒时间戳）
   const chartData = chartPoints.current.slice()
 
   const handleExportConfig = async () => {
@@ -259,15 +259,15 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   )
 }
 
-function getStartTime(range: string): string {
-  const now = new Date()
+function getStartTime(range: string): number {
+  const now = Date.now()
   switch (range) {
-    case '15m': return new Date(now.getTime() - 15 * 60000).toISOString()
-    case '1h': return new Date(now.getTime() - 60 * 60000).toISOString()
-    case '6h': return new Date(now.getTime() - 360 * 60000).toISOString()
-    case '24h': return new Date(now.getTime() - 1440 * 60000).toISOString()
-    case '7d': return new Date(now.getTime() - 7 * 86400000).toISOString()
-    default: return new Date(now.getTime() - 60 * 60000).toISOString()
+    case '15m': return now - 15 * 60000
+    case '1h': return now - 60 * 60000
+    case '6h': return now - 360 * 60000
+    case '24h': return now - 1440 * 60000
+    case '7d': return now - 7 * 86400000
+    default: return now - 60 * 60000
   }
 }
 

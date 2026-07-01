@@ -10255,18 +10255,18 @@ const createUser = (data) => api.post("/users", data).then((r2) => r2.data);
 const deleteUser = (id2) => api.delete(`/users/${id2}`).then((r2) => r2.data);
 const getUserStats = (id2) => api.get(`/users/${id2}/stats`).then((r2) => r2.data);
 const getUserHistory = (id2, page = 1, pageSize = 20) => api.get(`/users/${id2}/history?page=${page}&pageSize=${pageSize}`).then((r2) => r2.data);
-const getUserTraffic = (id2, since = "", end = "") => {
-  let params = `end=${encodeURIComponent(end)}`;
-  if (since) {
-    params = `since=${encodeURIComponent(since)}&` + params;
+const getUserTraffic = (id2, since = 0, end = 0) => {
+  let params = `end=${end}`;
+  if (since > 0) {
+    params = `since=${since}&` + params;
   }
   return api.get(`/users/${id2}/traffic?${params}`).then((r2) => r2.data);
 };
 const getStats = () => api.get("/stats").then((r2) => r2.data);
-const getStatsHistory = (userId = 0, since = "", end = "") => {
-  let params = `userId=${userId}&end=${encodeURIComponent(end)}`;
-  if (since) {
-    params = `userId=${userId}&since=${encodeURIComponent(since)}&` + params.split("&").slice(1).join("&");
+const getStatsHistory = (userId = 0, since = 0, end = 0) => {
+  let params = `userId=${userId}&end=${end}`;
+  if (since > 0) {
+    params = `userId=${userId}&since=${since}&` + params.split("&").slice(1).join("&");
   }
   return api.get(`/stats/history?${params}`).then((r2) => r2.data);
 };
@@ -32086,20 +32086,20 @@ const Dashboard = ({ onViewUser }) => {
   ] });
 };
 function getStartTime$1(range3) {
-  const now2 = /* @__PURE__ */ new Date();
+  const now2 = Date.now();
   switch (range3) {
     case "15m":
-      return new Date(now2.getTime() - 15 * 6e4).toISOString();
+      return now2 - 15 * 6e4;
     case "1h":
-      return new Date(now2.getTime() - 60 * 6e4).toISOString();
+      return now2 - 60 * 6e4;
     case "6h":
-      return new Date(now2.getTime() - 360 * 6e4).toISOString();
+      return now2 - 360 * 6e4;
     case "24h":
-      return new Date(now2.getTime() - 1440 * 6e4).toISOString();
+      return now2 - 1440 * 6e4;
     case "7d":
-      return new Date(now2.getTime() - 7 * 864e5).toISOString();
+      return now2 - 7 * 864e5;
     default:
-      return new Date(now2.getTime() - 60 * 6e4).toISOString();
+      return now2 - 60 * 6e4;
   }
 }
 const Users = ({ onViewUser }) => {
@@ -32374,21 +32374,21 @@ const UserDetail = ({ userId, onBack }) => {
       setStats(s2);
       if (isFirstLoad.current) {
         isFirstLoad.current = false;
-        const t2 = await getUserTraffic(userId, getStartTime(timeRange), "");
+        const t2 = await getUserTraffic(userId, getStartTime(timeRange), 0);
         setTraffic(t2);
         if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
           chartPoints.current = t2.chart.map((p2) => ({ ...p2 }));
         }
       } else {
-        const latest = chartPoints.current.length > 0 ? chartPoints.current[chartPoints.current.length - 1].timestamp : "";
-        if (latest) {
-          const t2 = await getUserTraffic(userId, latest, "");
+        const latest = chartPoints.current.length > 0 ? chartPoints.current[chartPoints.current.length - 1].ts : 0;
+        if (latest > 0) {
+          const t2 = await getUserTraffic(userId, latest, 0);
           if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
-            const seen = new Set(chartPoints.current.map((p2) => p2.timestamp));
+            const seen = new Set(chartPoints.current.map((p2) => p2.ts));
             for (const p2 of t2.chart) {
-              if (!seen.has(p2.timestamp)) {
+              if (!seen.has(p2.ts)) {
                 chartPoints.current.push(p2);
-                seen.add(p2.timestamp);
+                seen.add(p2.ts);
               }
             }
             if (chartPoints.current.length > 200) {
@@ -32582,20 +32582,20 @@ const UserDetail = ({ userId, onBack }) => {
   ] });
 };
 function getStartTime(range3) {
-  const now2 = /* @__PURE__ */ new Date();
+  const now2 = Date.now();
   switch (range3) {
     case "15m":
-      return new Date(now2.getTime() - 15 * 6e4).toISOString();
+      return now2 - 15 * 6e4;
     case "1h":
-      return new Date(now2.getTime() - 60 * 6e4).toISOString();
+      return now2 - 60 * 6e4;
     case "6h":
-      return new Date(now2.getTime() - 360 * 6e4).toISOString();
+      return now2 - 360 * 6e4;
     case "24h":
-      return new Date(now2.getTime() - 1440 * 6e4).toISOString();
+      return now2 - 1440 * 6e4;
     case "7d":
-      return new Date(now2.getTime() - 7 * 864e5).toISOString();
+      return now2 - 7 * 864e5;
     default:
-      return new Date(now2.getTime() - 60 * 6e4).toISOString();
+      return now2 - 60 * 6e4;
   }
 }
 const Config = () => {

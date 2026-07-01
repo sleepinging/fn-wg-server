@@ -54,7 +54,29 @@ func Init(dataDir string) error {
 		return fmt.Errorf("create tables: %w", err)
 	}
 
+	// 迁移旧数据库：text 时间戳 → int64 毫秒
+	migrateOldDB()
+
 	return nil
+}
+
+func migrateOldDB() {
+	// 添加新列（如果已有则忽略错误）
+	alterStmts := []string{
+		"ALTER TABLE bandwidth_history ADD COLUMN ts INTEGER",
+		"ALTER TABLE users ADD COLUMN created_at_new INTEGER",
+		"ALTER TABLE users ADD COLUMN updated_at_new INTEGER",
+		"ALTER TABLE system_log ADD COLUMN created_at_new INTEGER",
+	}
+	for _, stmt := range alterStmts {
+		db.Exec(stmt)
+	}
+
+	// 迁移已存在的数据：text timestamp → ms
+	db.Exec(`UPDATE bandwidth_history SET ts = CAST(strftime('%s', timestamp) AS INTEGER) * 1000 WHERE ts IS NULL AND timestamp IS NOT NULL`)
+	db.Exec(`UPDATE users SET created_at_new = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at_new IS NULL AND created_at IS NOT NULL`)
+	db.Exec(`UPDATE users SET updated_at_new = CAST(strftime('%s', updated_at) AS INTEGER) * 1000 WHERE updated_at_new IS NULL AND updated_at IS NOT NULL`)
+	db.Exec(`UPDATE system_log SET created_at_new = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at_new IS NULL AND created_at IS NOT NULL`)
 }
 
 func createTables() error {
@@ -71,8 +93,8 @@ func createTables() error {
 			mtu INTEGER DEFAULT 1420,
 			persistent_keepalive INTEGER DEFAULT 25,
 			enabled INTEGER DEFAULT 1,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
+			updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
 		)`,
 		`CREATE TABLE IF NOT EXISTS bandwidth_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,10 +103,9 @@ func createTables() error {
 			tx_bytes INTEGER DEFAULT 0,
 			rx_speed REAL DEFAULT 0,
 			tx_speed REAL DEFAULT 0,
-			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			ts INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		)`,
-
 		`CREATE TABLE IF NOT EXISTS config (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
@@ -93,7 +114,7 @@ func createTables() error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			level TEXT DEFAULT 'INFO',
 			message TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
 		)`,
 	}
 
@@ -164,8 +185,9 @@ func Log(level, message string) {
 	if db == nil {
 		return
 	}
+	now := time.Now().UnixMilli()
+	db.Exec("INSERT INTO system_log (level, message, created_at) VALUES (?, ?, ?)", level, message, now)
 	// Keep only last 10000 logs to prevent bloat
-	db.Exec("INSERT INTO system_log (level, message) VALUES (?, ?)", level, message)
 	db.Exec("DELETE FROM system_log WHERE id NOT IN (SELECT id FROM system_log ORDER BY id DESC LIMIT 10000)")
 }
 
@@ -211,7 +233,8 @@ func GetLogs(page, pageSize int, level, search string) ([]map[string]interface{}
 	logs := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var id int
-		var lvl, msg, ts string
+		var lvl, msg string
+		var ts int64
 		if err := rows.Scan(&id, &lvl, &msg, &ts); err != nil {
 			continue
 		}
@@ -219,7 +242,7 @@ func GetLogs(page, pageSize int, level, search string) ([]map[string]interface{}
 			"id":        id,
 			"level":     lvl,
 			"message":   msg,
-			"createdAt": toLocalTime(ts),
+			"createdAt": ts, // 前端用 new Date(ts).toLocaleString() 显示
 		})
 	}
 	return logs, total, nil
@@ -227,14 +250,13 @@ func GetLogs(page, pageSize int, level, search string) ([]map[string]interface{}
 
 // CleanLogsByDays removes logs older than specified days.
 func CleanLogsByDays(days int) error {
-	cutoff := time.Now().AddDate(0, 0, -days)
-	_, err := db.Exec("DELETE FROM system_log WHERE created_at < ?", cutoff.Format("2006-01-02 15:04:05"))
+	cutoff := time.Now().AddDate(0, 0, -days).UnixMilli()
+	_, err := db.Exec("DELETE FROM system_log WHERE created_at < ?", cutoff)
 	return err
 }
 
 // GetLogSize returns the database file size in bytes.
 func GetLogSize() (int64, error) {
-	// Calculate total DB file sizes
 	var size int64
 	baseDir := filepath.Dir(dbPath)
 	entries, err := os.ReadDir(baseDir)
@@ -254,37 +276,16 @@ func GetLogSize() (int64, error) {
 
 // CleanBandwidthHistory removes bandwidth records older than days.
 func CleanBandwidthHistory(days int) error {
-	cutoff := time.Now().AddDate(0, 0, -days)
-	_, err := db.Exec("DELETE FROM bandwidth_history WHERE timestamp < ?", cutoff.Format("2006-01-02 15:04:05"))
+	cutoff := time.Now().AddDate(0, 0, -days).UnixMilli()
+	_, err := db.Exec("DELETE FROM bandwidth_history WHERE ts < ?", cutoff)
 	return err
 }
 
-// toLocalTime 将数据库中的 UTC 时间戳字符串转为 Asia/Shanghai 时区显示。
-// 支持格式: "2006-01-02 15:04:05" (SQLite CURRENT_TIMESTAMP, UTC)
-//           "2006-01-02T15:04:05Z" (ISO 8601 UTC)
-func toLocalTime(ts string) string {
-	if ts == "" {
-		return ts
+// FormatTime 将毫秒时间戳转为 Asia/Shanghai 显示字符串
+func FormatTime(ms int64) string {
+	if ms == 0 {
+		return ""
 	}
-	var t time.Time
-	var err error
-	// 尝试多种格式解析
-	formats := []string{
-		"2006-01-02 15:04:05",
-		"2006-01-02T15:04:05Z",
-		"2006-01-02T15:04:05",
-		time.RFC3339,
-	}
-	for _, f := range formats {
-		t, err = time.Parse(f, ts)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		// 解析失败，原样返回
-		return ts
-	}
-	// 转换为本地时区 (Asia/Shanghai)
-	return t.In(time.Local).Format("2006-01-02 15:04:05")
+	t := time.UnixMilli(ms).In(time.Local)
+	return t.Format("2006-01-02 15:04:05")
 }

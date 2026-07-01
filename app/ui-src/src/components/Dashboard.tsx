@@ -177,15 +177,15 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   )
 }
 
-function getStartTime(range: string): string {
-  const now = new Date()
+function getStartTime(range: string): number {
+  const now = Date.now()
   switch (range) {
-    case '15m': return new Date(now.getTime() - 15 * 60000).toISOString()
-    case '1h': return new Date(now.getTime() - 60 * 60000).toISOString()
-    case '6h': return new Date(now.getTime() - 360 * 60000).toISOString()
-    case '24h': return new Date(now.getTime() - 1440 * 60000).toISOString()
-    case '7d': return new Date(now.getTime() - 7 * 86400000).toISOString()
-    default: return new Date(now.getTime() - 60 * 60000).toISOString()
+    case '15m': return now - 15 * 60000
+    case '1h': return now - 60 * 60000
+    case '6h': return now - 360 * 60000
+    case '24h': return now - 1440 * 60000
+    case '7d': return now - 7 * 86400000
+    default: return now - 60 * 60000
   }
 }
 

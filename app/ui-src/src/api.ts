@@ -53,7 +53,7 @@ export interface GlobalStats {
 }
 
 export interface BandwidthPoint {
-  timestamp: string
+  ts: number
   rxBytes: number
   txBytes: number
   rxSpeed: number
@@ -96,20 +96,20 @@ export const deleteUser = (id: number) => api.delete(`/users/${id}`).then(r => r
 export const getUserStats = (id: number) => api.get(`/users/${id}/stats`).then(r => r.data)
 export const getUserHistory = (id: number, page = 1, pageSize = 20) =>
   api.get(`/users/${id}/history?page=${page}&pageSize=${pageSize}`).then(r => r.data)
-export const getUserTraffic = (id: number, since = '', end = '') => {
-  let params = `end=${encodeURIComponent(end)}`
-  if (since) {
-    params = `since=${encodeURIComponent(since)}&` + params
+export const getUserTraffic = (id: number, since = 0, end = 0) => {
+  let params = `end=${end}`
+  if (since > 0) {
+    params = `since=${since}&` + params
   }
   return api.get(`/users/${id}/traffic?${params}`).then(r => r.data)
 }
 
 // Stats
 export const getStats = () => api.get<GlobalStats>('/stats').then(r => r.data)
-export const getStatsHistory = (userId = 0, since = '', end = '') => {
-  let params = `userId=${userId}&end=${encodeURIComponent(end)}`
-  if (since) {
-    params = `userId=${userId}&since=${encodeURIComponent(since)}&` + params.split('&').slice(1).join('&')
+export const getStatsHistory = (userId = 0, since = 0, end = 0) => {
+  let params = `userId=${userId}&end=${end}`
+  if (since > 0) {
+    params = `userId=${userId}&since=${since}&` + params.split('&').slice(1).join('&')
   }
   return api.get<BandwidthPoint[]>(`/stats/history?${params}`).then(r => r.data)
 }

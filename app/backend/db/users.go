@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // User represents a WireGuard peer user.
@@ -18,8 +19,8 @@ type User struct {
 	MTU                 int     `json:"mtu"`
 	PersistentKeepalive int     `json:"persistentKeepalive"`
 	Enabled             bool    `json:"enabled"`
-	CreatedAt           string  `json:"createdAt"`
-	UpdatedAt           string  `json:"updatedAt"`
+	CreatedAt           int64   `json:"createdAt"`
+	UpdatedAt           int64   `json:"updatedAt"`
 	RxBytes             int64   `json:"rxBytes,omitempty"`
 	TxBytes             int64   `json:"txBytes,omitempty"`
 	RxSpeed             float64 `json:"rxSpeed,omitempty"`
@@ -34,11 +35,13 @@ func CreateUser(u User) (int64, error) {
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
+	now := time.Now().UnixMilli()
 	result, err := db.Exec(`INSERT INTO users 
-		(username, public_key, private_key, preshared_key, allowed_ips, internal_ip, dns, mtu, persistent_keepalive, enabled)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(username, public_key, private_key, preshared_key, allowed_ips, internal_ip, dns, mtu, persistent_keepalive, enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		u.Username, u.PublicKey, u.PrivateKey, u.PresharedKey,
-		u.AllowedIPs, u.InternalIP, u.DNS, u.MTU, u.PersistentKeepalive, u.Enabled)
+		u.AllowedIPs, u.InternalIP, u.DNS, u.MTU, u.PersistentKeepalive, u.Enabled,
+		now, now)
 	if err != nil {
 		return 0, fmt.Errorf("create user: %w", err)
 	}
@@ -63,8 +66,6 @@ func GetUserByID(id int) (*User, error) {
 		}
 		return nil, err
 	}
-	u.CreatedAt = toLocalTime(u.CreatedAt)
-	u.UpdatedAt = toLocalTime(u.UpdatedAt)
 	return u, nil
 }
 
@@ -86,8 +87,6 @@ func GetUserByUsername(username string) (*User, error) {
 		}
 		return nil, err
 	}
-	u.CreatedAt = toLocalTime(u.CreatedAt)
-	u.UpdatedAt = toLocalTime(u.UpdatedAt)
 	return u, nil
 }
 
@@ -112,8 +111,6 @@ func ListUsers() ([]User, error) {
 			&u.Enabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			continue
 		}
-		u.CreatedAt = toLocalTime(u.CreatedAt)
-		u.UpdatedAt = toLocalTime(u.UpdatedAt)
 		users = append(users, u)
 	}
 	return users, nil
@@ -125,11 +122,11 @@ func UpdateUser(u User) error {
 	defer dbLock.RUnlock()
 
 	_, err := db.Exec(`UPDATE users SET username=?, public_key=?, private_key=?, preshared_key=?,
-		allowed_ips=?, internal_ip=?, dns=?, mtu=?, persistent_keepalive=?, enabled=?, updated_at=CURRENT_TIMESTAMP
+		allowed_ips=?, internal_ip=?, dns=?, mtu=?, persistent_keepalive=?, enabled=?, updated_at=?
 		WHERE id=?`,
 		u.Username, u.PublicKey, u.PrivateKey, u.PresharedKey,
 		u.AllowedIPs, u.InternalIP, u.DNS, u.MTU, u.PersistentKeepalive,
-		u.Enabled, u.ID)
+		u.Enabled, time.Now().UnixMilli(), u.ID)
 	return err
 }
 
@@ -147,8 +144,6 @@ func GetSmallestUnusedIP(subnet string) (string, error) {
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
-	// subnet format: "192.168.5.0/24"
-	// Extract base IP
 	var baseIP string
 	fmt.Sscanf(subnet, "%s/", &baseIP)
 
@@ -165,11 +160,9 @@ func GetSmallestUnusedIP(subnet string) (string, error) {
 		usedIPs[ip] = true
 	}
 
-	// Parse the base IP
 	var a, b, c, d int
 	fmt.Sscanf(baseIP, "%d.%d.%d.%d", &a, &b, &c, &d)
 
-	// 从 10 开始分配，保留 .1-.9 给网关和其他用途
 	startIP := d + 1
 	if startIP < 10 {
 		startIP = 10
@@ -180,7 +173,6 @@ func GetSmallestUnusedIP(subnet string) (string, error) {
 			return candidate, nil
 		}
 	}
-	// Try next C segment
 	if c < 255 {
 		for i := 1; i < 255; i++ {
 			candidate := fmt.Sprintf("%d.%d.%d.%d/32", a, b, c+1, i)
@@ -191,22 +183,6 @@ func GetSmallestUnusedIP(subnet string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no unused IP available in subnet %s", subnet)
-}
-
-// GetUserTotalTraffic gets total traffic for a user across all sessions.
-func GetUserTotalTraffic(userID int) (rx int64, tx int64, err error) {
-	dbLock.RLock()
-	defer dbLock.RUnlock()
-
-	// 从 bandwidth_history 获取最新一条记录的累计流量
-	err = db.QueryRow(`SELECT rx_bytes, tx_bytes FROM bandwidth_history 
-		WHERE user_id = ? ORDER BY id DESC LIMIT 1`, userID).Scan(&rx, &tx)
-	if err == sql.ErrNoRows {
-		err = nil
-		rx = 0
-		tx = 0
-	}
-	return
 }
 
 // GetUserHistory returns empty history (connection tracking deprecated).

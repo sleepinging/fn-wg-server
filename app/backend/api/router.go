@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.65"
+var Version = "1.0.66"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -196,7 +196,7 @@ func listUsers(w http.ResponseWriter, r *http.Request) {
 			item["endpoint"] = peer.Endpoint
 			item["latestHandshake"] = peer.LatestHandshake
 			if peer.LatestHandshake > 0 {
-				item["onlineSince"] = time.Unix(int64(peer.LatestHandshake), 0).Format("2006-01-02 15:04:05")
+				item["onlineSince"] = db.FormatTime(peer.LatestHandshake * 1000)
 			}
 			// 实时带宽（从带宽历史记录取最新速度）
 			if point, err := db.GetLatestBandwidth(u.ID); err == nil && point != nil {
@@ -372,7 +372,7 @@ func getUser(w http.ResponseWriter, r *http.Request, userID int) {
 			user.Online = p.LatestHandshake > 0
 			user.ExternalIP = p.Endpoint
 			if p.LatestHandshake > 0 {
-				user.OnlineSince = time.Unix(int64(p.LatestHandshake), 0).Format("2006-01-02 15:04:05")
+				user.OnlineSince = db.FormatTime(p.LatestHandshake * 1000)
 			}
 			break
 		}
@@ -505,7 +505,7 @@ func handleUserStats(w http.ResponseWriter, r *http.Request, userID int) {
 			stats["txBytes"] = p.TransferTx
 			stats["endpoint"] = p.Endpoint
 			if p.LatestHandshake > 0 {
-				stats["onlineSince"] = time.Unix(int64(p.LatestHandshake), 0).Format("2006-01-02 15:04:05")
+				stats["onlineSince"] = db.FormatTime(p.LatestHandshake * 1000)
 			}
 
 			// Calculate speed from bandwidth history
@@ -547,30 +547,31 @@ func handleUserTraffic(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	startTime := r.URL.Query().Get("start")
-	endTime := r.URL.Query().Get("end")
-	since := r.URL.Query().Get("since")
 	aggregate := r.URL.Query().Get("aggregate")
-
 	maxPoints := 100
 
-	// 如果传了 since（前端最新的时间戳），只查该时间之后的增量数据
+	var startTs, endTs int64
+	since := r.URL.Query().Get("since")
 	if since != "" {
-		sinceTime := db.NormalizeTimeParam(since)
-		count, _ := db.CountBandwidthAfter(userID, sinceTime)
-		maxPoints = int(count)
-		if maxPoints > 100 {
-			maxPoints = 100
+		fmt.Sscanf(since, "%d", &startTs)
+		if startTs > 0 {
+			count, _ := db.CountBandwidthAfter(userID, startTs)
+			maxPoints = int(count)
+			if maxPoints > 100 {
+				maxPoints = 100
+			}
 		}
-		startTime = sinceTime
-	} else {
-		startTime = r.URL.Query().Get("start")
+	} else if s := r.URL.Query().Get("start"); s != "" {
+		fmt.Sscanf(s, "%d", &startTs)
+	}
+	if e := r.URL.Query().Get("end"); e != "" {
+		fmt.Sscanf(e, "%d", &endTs)
 	}
 
 	if aggregate == "" && maxPoints > 0 {
 		aggregate = "max"
 	}
-	points, ptsErr := db.GetBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, aggregate)
+	points, ptsErr := db.GetBandwidthHistoryAgg(userID, startTs, endTs, maxPoints, aggregate)
 	if ptsErr != nil {
 		writeError(w, http.StatusInternalServerError, ptsErr.Error())
 		return
@@ -648,36 +649,38 @@ func handleStatsHistory(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(uid, "%d", &userID)
 	}
 
-	since := r.URL.Query().Get("since")
-	startTime := r.URL.Query().Get("start")
-	endTime := r.URL.Query().Get("end")
 	aggregate := r.URL.Query().Get("aggregate")
-
 	maxPoints := 100
 
-	// 如果传了 since（前端最新的时间戳），只查该时间之后的增量数据
+	var startTs, endTs int64
+	since := r.URL.Query().Get("since")
 	if since != "" {
-		sinceTime := db.NormalizeTimeParam(since)
-		count, _ := db.CountBandwidthAfter(userID, sinceTime)
-		maxPoints = int(count)
-		if maxPoints > 100 {
-			maxPoints = 100
+		fmt.Sscanf(since, "%d", &startTs)
+		if startTs > 0 {
+			count, _ := db.CountBandwidthAfter(userID, startTs)
+			maxPoints = int(count)
+			if maxPoints > 100 {
+				maxPoints = 100
+			}
 		}
-		startTime = sinceTime
+	} else if s := r.URL.Query().Get("start"); s != "" {
+		fmt.Sscanf(s, "%d", &startTs)
+	}
+	if e := r.URL.Query().Get("end"); e != "" {
+		fmt.Sscanf(e, "%d", &endTs)
+	}
+
+	if startTs == 0 {
+		startTs = time.Now().Add(-1 * time.Hour).UnixMilli()
+	}
+	if endTs == 0 {
+		endTs = time.Now().UnixMilli()
 	}
 
 	if aggregate == "" && maxPoints > 0 {
 		aggregate = "max"
 	}
-
-	if since == "" && startTime == "" {
-		startTime = time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")
-	}
-	if endTime == "" {
-		endTime = time.Now().Format("2006-01-02 15:04:05")
-	}
-
-	points, err := db.GetBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, aggregate)
+	points, err := db.GetBandwidthHistoryAgg(userID, startTs, endTs, maxPoints, aggregate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -847,7 +850,7 @@ func handleExportAll(w http.ResponseWriter, r *http.Request) {
 	userDetails := make([]map[string]interface{}, 0)
 	for _, u := range users {
 		history, _, _ := db.GetUserHistory(u.ID, 1, 100)
-		bandwidth, _ := db.GetBandwidthHistoryLimit(u.ID, "", "", 100)
+		bandwidth, _ := db.GetBandwidthHistoryAgg(u.ID, 0, 0, 100, "max")
 		detail := map[string]interface{}{
 			"id":              u.ID,
 			"username":        u.Username,
