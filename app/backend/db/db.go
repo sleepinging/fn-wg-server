@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ var (
 )
 
 // Init opens the main database and creates tables.
+// 当 SQLITE_BUSY 时会自动重试最多 10 次（daemon 写入时的并发冲突）
 func Init(dataDir string) error {
 	dbLock.Lock()
 	defer dbLock.Unlock()
@@ -33,8 +35,19 @@ func Init(dataDir string) error {
 		return fmt.Errorf("open db: %w", err)
 	}
 
-	if err := db.Ping(); err != nil {
+	// 重试 Ping 应对 SQLITE_BUSY（守护进程正在写入）
+	for i := 0; i < 10; i++ {
+		if err = db.Ping(); err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "SQLITE_BUSY") {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
 		return fmt.Errorf("ping db: %w", err)
+	}
+	if err != nil {
+		return fmt.Errorf("ping db (after 10 retries): %w", err)
 	}
 
 	if err := createTables(); err != nil {
