@@ -61,22 +61,15 @@ func Init(dataDir string) error {
 }
 
 func migrateOldDB() {
-	// 添加新列（如果已有则忽略错误）
-	alterStmts := []string{
-		"ALTER TABLE bandwidth_history ADD COLUMN ts INTEGER",
-		"ALTER TABLE users ADD COLUMN created_at_new INTEGER",
-		"ALTER TABLE users ADD COLUMN updated_at_new INTEGER",
-		"ALTER TABLE system_log ADD COLUMN created_at_new INTEGER",
-	}
-	for _, stmt := range alterStmts {
-		db.Exec(stmt)
-	}
+	// bandwidth_history: 旧列名 timestamp(TEXT) → 新列 ts(INTEGER)
+	db.Exec("ALTER TABLE bandwidth_history ADD COLUMN ts INTEGER")
+	// SQLite 动态类型，TEXT 列存 INTEGER 没问题
+	db.Exec(`UPDATE bandwidth_history SET ts = CAST(strftime('%s', timestamp) AS INTEGER) * 1000 WHERE ts IS NULL`)
 
-	// 迁移已存在的数据：text timestamp → ms
-	db.Exec(`UPDATE bandwidth_history SET ts = CAST(strftime('%s', timestamp) AS INTEGER) * 1000 WHERE ts IS NULL AND timestamp IS NOT NULL`)
-	db.Exec(`UPDATE users SET created_at_new = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at_new IS NULL AND created_at IS NOT NULL`)
-	db.Exec(`UPDATE users SET updated_at_new = CAST(strftime('%s', updated_at) AS INTEGER) * 1000 WHERE updated_at_new IS NULL AND updated_at IS NOT NULL`)
-	db.Exec(`UPDATE system_log SET created_at_new = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at_new IS NULL AND created_at IS NOT NULL`)
+	// users/system_log: 列名相同，原地把 TEXT 转为 ms 整数
+	db.Exec(`UPDATE users SET created_at = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE typeof(created_at) = 'text'`)
+	db.Exec(`UPDATE users SET updated_at = CAST(strftime('%s', updated_at) AS INTEGER) * 1000 WHERE typeof(updated_at) = 'text'`)
+	db.Exec(`UPDATE system_log SET created_at = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE typeof(created_at) = 'text'`)
 }
 
 func createTables() error {

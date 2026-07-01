@@ -30,8 +30,8 @@ export interface User {
   mtu: number
   persistentKeepalive: number
   enabled: boolean
-  createdAt: string
-  updatedAt: string
+  createdAt: number
+  updatedAt: number
   rxBytes?: number
   txBytes?: number
   online?: boolean

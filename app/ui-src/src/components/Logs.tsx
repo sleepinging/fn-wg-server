@@ -69,7 +69,7 @@ const Logs: React.FC = () => {
       const allData = await getLogs(1, total || 10000, '', '')
       const entries = allData.data || []
       const lines = entries.map((log: LogEntry) =>
-        `[${log.createdAt}] [${log.level}] ${log.message}`
+        `[${new Date(log.createdAt).toLocaleString()}] [${log.level}] ${log.message}`
       ).join('\n')
       const blob = new Blob([lines + '\n'], { type: 'text/plain;charset=utf-8' })
       const url = URL.createObjectURL(blob)
@@ -154,7 +154,7 @@ const Logs: React.FC = () => {
         {!loading && logs.length === 0 && <div className="empty">暂无日志</div>}
         {(logs || []).map(log => (
           <div key={log.id} className="log-entry">
-            <span className="log-time">[{log.createdAt}]</span>
+            <span className="log-time">[{new Date(log.createdAt).toLocaleString()}]</span>
             <span className={`log-level log-level-${log.level.toLowerCase()}`}>[{log.level}]</span>
             <span className={`log-msg ${getLevelClass(log.level)}`}>
               {search ? highlightText(log.message, search) : log.message}

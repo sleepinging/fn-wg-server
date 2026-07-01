@@ -8,7 +8,6 @@ interface Props {
 
 const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [stats, setStats] = useState<GlobalStats | null>(null)
-
   const [users, setUsers] = useState<User[]>([])
   const [timeRange, setTimeRange] = useState('1h')
   const chartBuf = useRef<any[]>([])
@@ -25,26 +24,22 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
 
       if (firstLoad.current) {
         firstLoad.current = false
-        // 首次：全量拉取 100 点
-        const pts = await getStatsHistory(0, getStartTime(timeRange), '')
+        const pts = await getStatsHistory(0, getStartTime(timeRange), 0)
         if (pts?.length > 0) {
           chartBuf.current = pts.map(p => ({ ...p }))
-
         }
       } else {
-        // 增量：传 since=最新时间戳，后端返回 min(100, 新点数)
         const latest = chartBuf.current.length > 0
-          ? chartBuf.current[chartBuf.current.length - 1].timestamp
-          : ''
-        if (latest) {
-          const pts = await getStatsHistory(0, latest, '')
+          ? chartBuf.current[chartBuf.current.length - 1].ts
+          : 0
+        if (latest > 0) {
+          const pts = await getStatsHistory(0, latest, 0)
           if (pts?.length > 0) {
-            // 去重追加
-            const seen = new Set(chartBuf.current.map(p => p.timestamp))
+            const seen = new Set(chartBuf.current.map(p => p.ts))
             for (const p of pts) {
-              if (!seen.has(p.timestamp)) {
+              if (!seen.has(p.ts)) {
                 chartBuf.current.push(p)
-                seen.add(p.timestamp)
+                seen.add(p.ts)
               }
             }
             if (chartBuf.current.length > 200) {
@@ -82,9 +77,8 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  // chartData 直接从 chartBuf 读取
   const chartData = chartBuf.current.map(p => ({
-    time: new Date(p.timestamp).toLocaleTimeString(),
+    time: new Date(p.ts).toLocaleTimeString(),
     rx: p.rxSpeed || 0,
     tx: p.txSpeed || 0,
   }))

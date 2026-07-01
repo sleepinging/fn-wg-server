@@ -31956,20 +31956,20 @@ const Dashboard = ({ onViewUser }) => {
       setUsers(u2);
       if (firstLoad.current) {
         firstLoad.current = false;
-        const pts = await getStatsHistory(0, getStartTime$1(timeRange), "");
+        const pts = await getStatsHistory(0, getStartTime$1(timeRange), 0);
         if ((pts == null ? void 0 : pts.length) > 0) {
           chartBuf.current = pts.map((p2) => ({ ...p2 }));
         }
       } else {
-        const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].timestamp : "";
-        if (latest) {
-          const pts = await getStatsHistory(0, latest, "");
+        const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
+        if (latest > 0) {
+          const pts = await getStatsHistory(0, latest, 0);
           if ((pts == null ? void 0 : pts.length) > 0) {
-            const seen = new Set(chartBuf.current.map((p2) => p2.timestamp));
+            const seen = new Set(chartBuf.current.map((p2) => p2.ts));
             for (const p2 of pts) {
-              if (!seen.has(p2.timestamp)) {
+              if (!seen.has(p2.ts)) {
                 chartBuf.current.push(p2);
-                seen.add(p2.timestamp);
+                seen.add(p2.ts);
               }
             }
             if (chartBuf.current.length > 200) {
@@ -32004,7 +32004,7 @@ const Dashboard = ({ onViewUser }) => {
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
   const chartData = chartBuf.current.map((p2) => ({
-    time: new Date(p2.timestamp).toLocaleTimeString(),
+    time: new Date(p2.ts).toLocaleTimeString(),
     rx: p2.rxSpeed || 0,
     tx: p2.txSpeed || 0
   }));
@@ -32278,7 +32278,7 @@ const Users = ({ onViewUser }) => {
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatSpeed(user.rxSpeed || 0) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatSpeed(user.txSpeed || 0) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.createdAt }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: new Date(user.createdAt).toLocaleString() }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "actions", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => onViewUser(user.id), children: "详情" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm btn-danger", onClick: () => handleDelete(user), children: "删除" })
@@ -32861,7 +32861,7 @@ const Logs = () => {
       const allData = await getLogs(1, total || 1e4, "", "");
       const entries = allData.data || [];
       const lines = entries.map(
-        (log2) => `[${log2.createdAt}] [${log2.level}] ${log2.message}`
+        (log2) => `[${new Date(log2.createdAt).toLocaleString()}] [${log2.level}] ${log2.message}`
       ).join("\n");
       const blob = new Blob([lines + "\n"], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -32957,7 +32957,7 @@ const Logs = () => {
       (logs || []).map((log2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "log-entry", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "log-time", children: [
           "[",
-          log2.createdAt,
+          new Date(log2.createdAt).toLocaleString(),
           "]"
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `log-level log-level-${log2.level.toLowerCase()}`, children: [

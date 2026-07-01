@@ -179,7 +179,7 @@ const Users: React.FC<Props> = ({ onViewUser }) => {
               </td>
               <td>{formatSpeed(user.rxSpeed || 0)}</td>
               <td>{formatSpeed(user.txSpeed || 0)}</td>
-              <td>{user.createdAt}</td>
+              <td>{new Date(user.createdAt).toLocaleString()}</td>
               <td className="actions">
                 <button className="btn btn-sm" onClick={() => onViewUser(user.id)}>详情</button>
                 <button className="btn btn-sm btn-danger" onClick={() => handleDelete(user)}>删除</button>
