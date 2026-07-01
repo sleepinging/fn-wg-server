@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 // User represents a WireGuard peer user.
@@ -210,72 +209,7 @@ func GetUserTotalTraffic(userID int) (rx int64, tx int64, err error) {
 	return
 }
 
-// GetUserHistory gets connection history for a user.
+// GetUserHistory returns empty history (connection tracking deprecated).
 func GetUserHistory(userID int, page, pageSize int) ([]map[string]interface{}, int, error) {
-	dbLock.RLock()
-	defer dbLock.RUnlock()
-
-	var total int
-	db.QueryRow("SELECT COUNT(*) FROM connection_log WHERE user_id = ?", userID).Scan(&total)
-
-	rows, err := db.Query(`SELECT id, user_id, username, internal_ip, external_ip,
-		connected_at, disconnected_at, rx_bytes, tx_bytes
-		FROM connection_log WHERE user_id = ?
-		ORDER BY connected_at DESC LIMIT ? OFFSET ?`,
-		userID, pageSize, (page-1)*pageSize)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	history := make([]map[string]interface{}, 0)
-	for rows.Next() {
-		var id, uid int
-		var uname, intIP, extIP, connAt string
-		var discAt sql.NullString
-		var rx, tx int64
-		if err := rows.Scan(&id, &uid, &uname, &intIP, &extIP, &connAt, &discAt, &rx, &tx); err != nil {
-			continue
-		}
-		discTime := ""
-		if discAt.Valid {
-			discTime = discAt.String
-		}
-		history = append(history, map[string]interface{}{
-			"id":             id,
-			"userId":         uid,
-			"username":       uname,
-			"internalIP":     intIP,
-			"externalIP":     extIP,
-			"connectedAt":    toLocalTime(connAt),
-			"disconnectedAt": toLocalTime(discTime),
-			"rxBytes":        rx,
-			"txBytes":        tx,
-		})
-	}
-	return history, total, nil
-}
-
-// RecordConnection logs a connection event.
-func RecordConnection(userID int, username, internalIP, externalIP string) error {
-	dbLock.RLock()
-	defer dbLock.RUnlock()
-
-	_, err := db.Exec(`INSERT INTO connection_log 
-		(user_id, username, internal_ip, external_ip, connected_at)
-		VALUES (?, ?, ?, ?, ?)`,
-		userID, username, internalIP, externalIP, time.Now().Format("2006-01-02 15:04:05"))
-	return err
-}
-
-// UpdateConnectionOnDisconnect updates the disconnect time and traffic.
-func UpdateConnectionOnDisconnect(userID int, rx, tx int64) error {
-	dbLock.RLock()
-	defer dbLock.RUnlock()
-
-	_, err := db.Exec(`UPDATE connection_log SET 
-		disconnected_at = ?, rx_bytes = ?, tx_bytes = ?
-		WHERE user_id = ? AND disconnected_at IS NULL`,
-		time.Now().Format("2006-01-02 15:04:05"), rx, tx, userID)
-	return err
+	return []map[string]interface{}{}, 0, nil
 }

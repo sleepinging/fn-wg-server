@@ -84,18 +84,7 @@ func createTables() error {
 			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		)`,
-		`CREATE TABLE IF NOT EXISTS connection_log (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER,
-			username TEXT,
-			internal_ip TEXT,
-			external_ip TEXT,
-			connected_at DATETIME,
-			disconnected_at DATETIME,
-			rx_bytes INTEGER DEFAULT 0,
-			tx_bytes INTEGER DEFAULT 0,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-		)`,
+
 		`CREATE TABLE IF NOT EXISTS config (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL

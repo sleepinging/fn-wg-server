@@ -31969,25 +31969,19 @@ const Dashboard = ({ onViewUser }) => {
         firstLoad.current = false;
         const h2 = await getStatsHistory(0, getStartTime$1(timeRange), "");
         setHistory(h2);
-        chartBuf.current = (h2 || []).map((p2) => ({
-          time: new Date(p2.timestamp).toLocaleTimeString(),
-          rx: p2.rxSpeed || 0,
-          tx: p2.txSpeed || 0
-        }));
+        chartBuf.current = (h2 || []).map((p2) => ({ ...p2 }));
       } else {
         const tenSecAgo = new Date(Date.now() - 1e4).toISOString();
         const newPts = await getStatsHistory(0, tenSecAgo, "", "true");
         if ((newPts == null ? void 0 : newPts.length) > 0) {
           const buf = chartBuf.current;
-          const seen = new Set(buf.map((p2) => p2.time));
+          const seen = new Set(buf.map((p2) => p2.timestamp));
           for (const p2 of newPts) {
-            const time2 = new Date(p2.timestamp).toLocaleTimeString();
-            if (seen.has(time2)) continue;
-            seen.add(time2);
-            buf.push({ time: time2, rx: p2.rxSpeed || 0, tx: p2.txSpeed || 0 });
+            if (seen.has(p2.timestamp)) continue;
+            seen.add(p2.timestamp);
+            buf.push({ ...p2 });
           }
           if (buf.length > 200) buf.splice(0, buf.length - 200);
-          setHistory([...buf]);
         }
       }
     } catch (e3) {
@@ -32015,7 +32009,7 @@ const Dashboard = ({ onViewUser }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k2));
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
-  const chartData = (history || []).map((p2) => ({
+  const chartData = chartBuf.current.map((p2) => ({
     time: new Date(p2.timestamp).toLocaleTimeString(),
     rx: p2.rxSpeed || 0,
     tx: p2.txSpeed || 0

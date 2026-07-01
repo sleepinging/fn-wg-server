@@ -268,30 +268,8 @@ func InitInterface() error {
 	return ApplyConfig(*cfg, users)
 }
 
-// RemovePeer 从 WireGuard 接口移除对等端
-func RemovePeer(interfaceName, publicKey string) error {
-	client, err := newClient()
-	if err != nil {
-		return fmt.Errorf("wgctrl new: %w", err)
-	}
-	defer client.Close()
-
-	pubKey, err := wgtypes.ParseKey(publicKey)
-	if err != nil {
-		return fmt.Errorf("parse key: %w", err)
-	}
-
-	config := wgtypes.Config{
-		Peers: []wgtypes.PeerConfig{{
-			PublicKey: pubKey,
-			Remove:    true,
-		}},
-	}
-	return client.ConfigureDevice(interfaceName, config)
-}
-
 // GetPeers 获取当前 WireGuard 接口的所有对等端信息
-// CGI 进程无权限，从守护进程写入的缓存文件读取
+// CGI 进程无权限，从守护进程写入的内存缓存读取
 func GetPeers(interfaceName string) ([]PeerInfo, error) {
 	return GetPeersFromCache(interfaceName)
 }
@@ -355,59 +333,6 @@ func GetPeersFromCache(interfaceName string) ([]PeerInfo, error) {
 		return []PeerInfo{}, nil
 	}
 	return peersCache, nil
-}
-
-// getPeersFallback 降级方案：通过 /proc/net/wireguard 读取
-func getPeersFallback(interfaceName string) ([]PeerInfo, error) {
-	data, err := os.ReadFile("/proc/net/wireguard")
-	if err != nil {
-		return nil, err
-	}
-	return parseWireguardProc(string(data), interfaceName)
-}
-
-func parseWireguardProc(data, iface string) ([]PeerInfo, error) {
-	var peers []PeerInfo
-	lines := strings.Split(data, "\n")
-	inTarget := false
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, iface+":") {
-			inTarget = true
-			continue
-		}
-		if inTarget {
-			if line == "" {
-				break
-			}
-			// 解析对等端行
-			// 格式: public_key=xxx endpoint=xxx allowed_ips=xxx latest_handshake=xxx transfer=xxx persistent_keepalive=xxx
-			peer := PeerInfo{}
-			parts := strings.Fields(line)
-			for _, part := range parts {
-				kv := strings.SplitN(part, "=", 2)
-				if len(kv) != 2 {
-					continue
-				}
-				switch kv[0] {
-				case "public_key":
-					peer.PublicKey = kv[1]
-				case "endpoint":
-					peer.Endpoint = kv[1]
-				case "allowed_ips":
-					peer.AllowedIPs = kv[1]
-				case "latest_handshake":
-					fmt.Sscanf(kv[1], "%d", &peer.LatestHandshake)
-				case "transfer":
-					fmt.Sscanf(kv[1], "%d", &peer.TransferRx)
-				}
-			}
-			if peer.PublicKey != "" {
-				peers = append(peers, peer)
-			}
-		}
-	}
-	return peers, nil
 }
 
 // PeerInfo 对等端信息

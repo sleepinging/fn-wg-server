@@ -27,26 +27,20 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
         firstLoad.current = false
         const h = await getStatsHistory(0, getStartTime(timeRange), '')
         setHistory(h)
-        chartBuf.current = (h || []).map(p => ({
-          time: new Date(p.timestamp).toLocaleTimeString(),
-          rx: p.rxSpeed || 0,
-          tx: p.txSpeed || 0,
-        }))
+        chartBuf.current = (h || []).map(p => ({ ...p }))
       } else {
         // 每秒拉取最近 10 秒原始数据
         const tenSecAgo = new Date(Date.now() - 10000).toISOString()
         const newPts = await getStatsHistory(0, tenSecAgo, '', 'true')
         if (newPts?.length > 0) {
           const buf = chartBuf.current
-          const seen = new Set(buf.map(p => p.time))
+          const seen = new Set(buf.map(p => p.timestamp))
           for (const p of newPts) {
-            const time = new Date(p.timestamp).toLocaleTimeString()
-            if (seen.has(time)) continue
-            seen.add(time)
-            buf.push({ time, rx: p.rxSpeed || 0, tx: p.txSpeed || 0 })
+            if (seen.has(p.timestamp)) continue
+            seen.add(p.timestamp)
+            buf.push({ ...p })
           }
           if (buf.length > 200) buf.splice(0, buf.length - 200)
-          setHistory([...buf])
         }
       }
     } catch (e) {
@@ -78,7 +72,8 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  const chartData = (history || []).map(p => ({
+  // chartData 直接从 chartBuf 读取（BandwidthPoint[]），不经过 history state 二次映射
+  const chartData = chartBuf.current.map(p => ({
     time: new Date(p.timestamp).toLocaleTimeString(),
     rx: p.rxSpeed || 0,
     tx: p.txSpeed || 0,

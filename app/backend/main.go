@@ -19,7 +19,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.62"
+const Version = "1.0.63"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -266,10 +266,6 @@ func startDaemon(dataDir string) {
 		return
 	}
 	f.Close()
-
-	// 写 PID 文件（与生命周期脚本一致）
-	pidPath := filepath.Join(dataDir, "monitor.pid")
-	os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0644)
 
 	log.Printf("startDaemon: daemon started (PID: %d)", cmd.Process.Pid)
 }
