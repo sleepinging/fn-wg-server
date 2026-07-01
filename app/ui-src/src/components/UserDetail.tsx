@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { getUser, getUserStats, getUserTraffic, getUserConfig, User } from '../api'
 import HistoryTable from './HistoryTable'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
@@ -13,6 +13,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [stats, setStats] = useState<any>(null)
   const [traffic, setTraffic] = useState<any>(null)
   const [timeRange, setTimeRange] = useState('1h')
+  const chartBuffer = useRef<any[]>([])
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
 
@@ -32,6 +33,29 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
       setUser(u)
       setStats(s)
       setTraffic(t)
+      // 滚动缓冲区：追加新数据，去重，上限 200 点
+      if (t?.chart) {
+        const newPoints = t.chart.map((p: any) => ({
+          time: new Date(p.timestamp).toLocaleTimeString(),
+          rxSpeed: p.rxSpeed || 0,
+          txSpeed: p.txSpeed || 0,
+          rxBytes: p.rxBytes || 0,
+          txBytes: p.txBytes || 0,
+        }))
+        const existing = chartBuffer.current
+        const seen = new Set(existing.map(p => p.time))
+        for (const pt of newPoints) {
+          if (!seen.has(pt.time)) {
+            existing.push(pt)
+            seen.add(pt.time)
+          }
+        }
+        // 只保留最近 200 个点
+        if (existing.length > 200) {
+          existing.splice(0, existing.length - 200)
+        }
+        chartBuffer.current = existing
+      }
     } catch (e) {
       console.error('Failed to load user detail', e)
     }
@@ -53,13 +77,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  const chartData = (traffic?.chart || []).map((p: any) => ({
-    time: new Date(p.timestamp).toLocaleTimeString(),
-    rxSpeed: p.rxSpeed || 0,
-    txSpeed: p.txSpeed || 0,
-    rxBytes: p.rxBytes || 0,
-    txBytes: p.txBytes || 0,
-  }))
+  const chartData = chartBuffer.current.slice()
 
   const handleExportConfig = async () => {
     try {

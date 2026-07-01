@@ -31933,6 +31933,7 @@ const Dashboard = ({ onViewUser }) => {
   const [history, setHistory] = reactExports.useState([]);
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
+  const chartBuffer = reactExports.useRef([]);
   const loadData = reactExports.useCallback(async () => {
     try {
       const [s2, h2, u2] = await Promise.all([
@@ -31943,6 +31944,23 @@ const Dashboard = ({ onViewUser }) => {
       setStats(s2);
       setHistory(h2);
       setUsers(u2);
+      if (h2) {
+        const newPts = (Array.isArray(h2) ? h2 : []).map((p2) => ({
+          time: new Date(p2.timestamp).toLocaleTimeString(),
+          rx: p2.rxSpeed || 0,
+          tx: p2.txSpeed || 0
+        }));
+        const buf = chartBuffer.current;
+        const seen = new Set(buf.map((p2) => p2.time));
+        for (const pt of newPts) {
+          if (!seen.has(pt.time)) {
+            buf.push(pt);
+            seen.add(pt.time);
+          }
+        }
+        if (buf.length > 200) buf.splice(0, buf.length - 200);
+        chartBuffer.current = buf;
+      }
     } catch (e3) {
       console.error("Failed to load dashboard data", e3);
     }
@@ -31966,11 +31984,7 @@ const Dashboard = ({ onViewUser }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k2));
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
-  const chartData = (history || []).map((p2) => ({
-    time: new Date(p2.timestamp).toLocaleTimeString(),
-    rx: p2.rxSpeed || 0,
-    tx: p2.txSpeed || 0
-  }));
+  const chartData = chartBuffer.current.slice();
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "dashboard", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stats-grid", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
@@ -32315,6 +32329,7 @@ const UserDetail = ({ userId, onBack }) => {
   const [stats, setStats] = reactExports.useState(null);
   const [traffic, setTraffic] = reactExports.useState(null);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
+  const chartBuffer = reactExports.useRef([]);
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
   reactExports.useEffect(() => {
@@ -32332,6 +32347,27 @@ const UserDetail = ({ userId, onBack }) => {
       setUser(u2);
       setStats(s2);
       setTraffic(t2);
+      if (t2 == null ? void 0 : t2.chart) {
+        const newPoints = t2.chart.map((p2) => ({
+          time: new Date(p2.timestamp).toLocaleTimeString(),
+          rxSpeed: p2.rxSpeed || 0,
+          txSpeed: p2.txSpeed || 0,
+          rxBytes: p2.rxBytes || 0,
+          txBytes: p2.txBytes || 0
+        }));
+        const existing = chartBuffer.current;
+        const seen = new Set(existing.map((p2) => p2.time));
+        for (const pt of newPoints) {
+          if (!seen.has(pt.time)) {
+            existing.push(pt);
+            seen.add(pt.time);
+          }
+        }
+        if (existing.length > 200) {
+          existing.splice(0, existing.length - 200);
+        }
+        chartBuffer.current = existing;
+      }
     } catch (e3) {
       console.error("Failed to load user detail", e3);
     }
@@ -32350,13 +32386,7 @@ const UserDetail = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k2));
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
-  const chartData = ((traffic == null ? void 0 : traffic.chart) || []).map((p2) => ({
-    time: new Date(p2.timestamp).toLocaleTimeString(),
-    rxSpeed: p2.rxSpeed || 0,
-    txSpeed: p2.txSpeed || 0,
-    rxBytes: p2.rxBytes || 0,
-    txBytes: p2.txBytes || 0
-  }));
+  const chartData = chartBuffer.current.slice();
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId);

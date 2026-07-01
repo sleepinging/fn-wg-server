@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getStats, getStatsHistory, getUsers, GlobalStats, BandwidthPoint, User } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -11,6 +11,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [history, setHistory] = useState<BandwidthPoint[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [timeRange, setTimeRange] = useState('1h')
+  const chartBuffer = useRef<any[]>([])
 
   const loadData = useCallback(async () => {
     try {
@@ -22,6 +23,24 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
       setStats(s)
       setHistory(h)
       setUsers(u)
+      // 滚动缓冲区
+      if (h) {
+        const newPts = (Array.isArray(h) ? h : []).map((p: any) => ({
+          time: new Date(p.timestamp).toLocaleTimeString(),
+          rx: p.rxSpeed || 0,
+          tx: p.txSpeed || 0,
+        }))
+        const buf = chartBuffer.current
+        const seen = new Set(buf.map(p => p.time))
+        for (const pt of newPts) {
+          if (!seen.has(pt.time)) {
+            buf.push(pt)
+            seen.add(pt.time)
+          }
+        }
+        if (buf.length > 200) buf.splice(0, buf.length - 200)
+        chartBuffer.current = buf
+      }
     } catch (e) {
       console.error('Failed to load dashboard data', e)
     }
@@ -49,11 +68,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  const chartData = (history || []).map(p => ({
-    time: new Date(p.timestamp).toLocaleTimeString(),
-    rx: p.rxSpeed || 0,
-    tx: p.txSpeed || 0,
-  }))
+  const chartData = chartBuffer.current.slice()
 
   return (
     <div className="dashboard">
