@@ -20,15 +20,16 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.77"
-
 func init() {
-	// 统一使用 Asia/Shanghai 时区
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	if err == nil {
 		time.Local = loc
 	}
 }
+
+const Version = "1.0.78"
+
+
 
 func main() {
 	// Determine data directory

@@ -153,7 +153,7 @@ func CountBandwidthAfter(userID int, sinceMs int64) (int64, error) {
 	return count, nil
 }
 
-// GetLatestBandwidth gets the latest bandwidth point for a user.
+// GetLatestBandwidth gets the latest bandwidth point (DB + buffer).
 func GetLatestBandwidth(userID int) (*BandwidthPoint, error) {
 	dbLock.RLock()
 	defer dbLock.RUnlock()
@@ -163,10 +163,33 @@ func GetLatestBandwidth(userID int) (*BandwidthPoint, error) {
 		FROM bandwidth_history WHERE user_id = ?
 		ORDER BY ts DESC LIMIT 1`, userID).
 		Scan(&p.Ts, &p.RxBytes, &p.TxBytes, &p.RxSpeed, &p.TxSpeed)
+
+	bufLatest := GetLatestBufferedPoint(userID)
+	if bufLatest != nil {
+		if err != nil || bufLatest.Ts >= p.Ts {
+			return bufLatest, nil
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
 	return p, nil
+}
+
+// GetLatestBufferedPoint returns the latest buffered point for a user.
+func GetLatestBufferedPoint(userID int) *BandwidthPoint {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+	var latest *BandwidthPoint
+	for _, p := range pointBuf {
+		if p.UserID == userID || (userID == 0 && p.UserID == 0) {
+			if latest == nil || p.GoTs > latest.Ts {
+				latest = &BandwidthPoint{Ts: p.GoTs, RxBytes: p.RxBytes, TxBytes: p.TxBytes, RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed}
+			}
+		}
+	}
+	return latest
 }
 
 // GetUserTotalTraffic gets total traffic for a user across all sessions.

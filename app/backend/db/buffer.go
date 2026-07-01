@@ -15,7 +15,7 @@ type bufferedPoint struct {
 	TxBytes int64
 	RxSpeed float64
 	TxSpeed float64
-	Ts      int64
+	GoTs    int64 // 仅内存比较用，不写入 DB
 }
 
 // ==================== 全局写缓冲 ====================
@@ -114,10 +114,10 @@ func FlushBuffer() {
 	if len(batch) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO bandwidth_history 
 			(user_id, rx_bytes, tx_bytes, rx_speed, tx_speed, ts)
-			VALUES (?, ?, ?, ?, ?, ?)`)
+			VALUES (?, ?, ?, ?, ?, CAST(strftime('%s','now') AS INTEGER) * 1000)`)
 		if err == nil {
 			for _, p := range batch {
-				stmt.Exec(p.UserID, p.RxBytes, p.TxBytes, p.RxSpeed, p.TxSpeed, p.Ts)
+				stmt.Exec(p.UserID, p.RxBytes, p.TxBytes, p.RxSpeed, p.TxSpeed)
 			}
 			stmt.Close()
 		} else {
@@ -182,7 +182,8 @@ func BufferedSaveBandwidthPoint(userID int, rxBytes, txBytes int64, rxSpeed, txS
 	writeMu.Lock()
 	pointBuf = append(pointBuf, bufferedPoint{
 		UserID: userID, RxBytes: rxBytes, TxBytes: txBytes,
-		RxSpeed: rxSpeed, TxSpeed: txSpeed, Ts: time.Now().UnixMilli(),
+		RxSpeed: rxSpeed, TxSpeed: txSpeed,
+		GoTs: time.Now().UnixMilli(),
 	})
 	writeMu.Unlock()
 }
@@ -204,7 +205,7 @@ func CountBufferedAfter(userID int, sinceMs int64) int {
 	defer writeMu.Unlock()
 	count := 0
 	for _, p := range pointBuf {
-		if (userID == 0 || p.UserID == userID) && p.Ts > sinceMs {
+		if (userID == 0 || p.UserID == userID) && p.GoTs > sinceMs {
 			count++
 		}
 	}
@@ -216,9 +217,9 @@ func GetBufferedPointsAfter(userID int, sinceMs int64) []BandwidthPoint {
 	defer writeMu.Unlock()
 	var result []BandwidthPoint
 	for _, p := range pointBuf {
-		if (userID == 0 || p.UserID == userID) && p.Ts > sinceMs {
+		if (userID == 0 || p.UserID == userID) && p.GoTs > sinceMs {
 			result = append(result, BandwidthPoint{
-				Ts: p.Ts, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
+				Ts: p.GoTs, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
 				RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed,
 			})
 		}

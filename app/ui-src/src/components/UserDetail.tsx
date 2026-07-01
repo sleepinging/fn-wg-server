@@ -33,6 +33,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         setTraffic(t)
         if (t?.chart?.length > 0) {
           chartBuf.current = t.chart.map((p: any) => ({ ...p }))
+          setRenderKey(v => v + 1)
         }
       } else {
         const latest = chartBuf.current.length > 0
@@ -51,6 +52,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
             if (chartBuf.current.length > 200) {
               chartBuf.current = chartBuf.current.slice(-200)
             }
+            setRenderKey(v => v + 1)
           }
         }
       }
@@ -82,6 +84,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k))
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
+
+  const [renderKey, setRenderKey] = useState(0)
 
   const chartData = chartBuf.current.map((p: any) => ({
     time: new Date(p.ts).toLocaleTimeString(),
@@ -206,7 +210,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
             <option value="7d">7天</option>
           </select>
         </div>
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={250} key={renderKey}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="time" fontSize={12} />
