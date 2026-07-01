@@ -109,6 +109,19 @@ func LoadConfig() (*WGConfig, error) {
 	if v, ok := all["wg_public_key"]; ok {
 		cfg.PublicKey = v
 	}
+
+	// 如果数据库中没有密钥对，自动生成并保存
+	if cfg.PrivateKey == "" || cfg.PublicKey == "" {
+		priv, pub, err := GenerateKey()
+		if err != nil {
+			return nil, fmt.Errorf("auto-generate key: %w", err)
+		}
+		cfg.PrivateKey = priv
+		cfg.PublicKey = pub
+		// 保存到数据库
+		db.SetConfig("wg_private_key", priv)
+		db.SetConfig("wg_public_key", pub)
+	}
 	if v, ok := all["wg_address"]; ok {
 		cfg.Address = v
 	}
