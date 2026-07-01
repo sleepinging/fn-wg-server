@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.40"
+const Version = "1.0.41"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -135,9 +136,18 @@ func handleCGI() {
 
 	statusCode, respHeaders, respBody, err := daemon.ProxyToDaemon(dataDir, method, urlPath, queryString, bodyReader, contentType)
 	if err != nil {
-		log.Printf("ProxyToDaemon error: %v (url=%s)", err, urlPath)
-		writeCGIError(502, "daemon unavailable")
-		return
+		// 守护进程未运行，尝试自动启动
+		log.Printf("ProxyToDaemon error: %v (url=%s) - trying to start daemon", err, urlPath)
+		startDaemon(dataDir)
+		// 等待 socket 就绪
+		time.Sleep(2 * time.Second)
+		// 重试一次
+		statusCode, respHeaders, respBody, err = daemon.ProxyToDaemon(dataDir, method, urlPath, queryString, bodyReader, contentType)
+		if err != nil {
+			log.Printf("ProxyToDaemon retry failed: %v", err)
+			writeCGIError(502, "daemon unavailable")
+			return
+		}
 	}
 
 	// 写状态行
@@ -227,6 +237,22 @@ func handleCommand(cmd string) {
 		fmt.Println("Available commands: daemon, version, init-wg")
 		os.Exit(1)
 	}
+}
+
+// startDaemon 启动守护进程（从 CGI 调用时自动启动）
+func startDaemon(dataDir string) {
+	exe, err := os.Executable()
+	if err != nil {
+		log.Printf("startDaemon: cannot get executable: %v", err)
+		return
+	}
+	cmd := exec.Command(exe, "daemon")
+	cmd.Env = append(os.Environ(), "TRIM_PKGVAR="+dataDir)
+	if err := cmd.Start(); err != nil {
+		log.Printf("startDaemon: failed to start: %v", err)
+		return
+	}
+	log.Printf("startDaemon: daemon started (PID: %d)", cmd.Process.Pid)
 }
 
 // GetAppDest returns the application destination directory.
