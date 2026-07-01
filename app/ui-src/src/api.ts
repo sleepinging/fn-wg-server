@@ -96,13 +96,34 @@ export const deleteUser = (id: number) => api.delete(`/users/${id}`).then(r => r
 export const getUserStats = (id: number) => api.get(`/users/${id}/stats`).then(r => r.data)
 export const getUserHistory = (id: number, page = 1, pageSize = 20) =>
   api.get(`/users/${id}/history?page=${page}&pageSize=${pageSize}`).then(r => r.data)
-export const getUserTraffic = (id: number, start = '', end = '', since = '') =>
-  api.get(`/users/${id}/traffic?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&since=${encodeURIComponent(since)}`).then(r => r.data)
+export const getUserTraffic = (id: number, start = '', end = '', raw = '') => {
+  // startTs 用数值时间戳（毫秒），避免 ISO 字符串被 shell/环境变量截断
+  let params = `end=${encodeURIComponent(end)}&raw=${raw}`
+  if (start) {
+    const ts = new Date(start).getTime()
+    if (!isNaN(ts)) {
+      params = `startTs=${ts}&` + params
+    } else {
+      params = `start=${encodeURIComponent(start)}&` + params
+    }
+  }
+  return api.get(`/users/${id}/traffic?${params}`).then(r => r.data)
+}
 
 // Stats
 export const getStats = () => api.get<GlobalStats>('/stats').then(r => r.data)
-export const getStatsHistory = (userId = 0, start = '', end = '', since = '') =>
-  api.get<BandwidthPoint[]>(`/stats/history?userId=${userId}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&since=${encodeURIComponent(since)}`).then(r => r.data)
+export const getStatsHistory = (userId = 0, start = '', end = '', raw = '') => {
+  let params = `userId=${userId}&end=${encodeURIComponent(end)}&raw=${raw}`
+  if (start) {
+    const ts = new Date(start).getTime()
+    if (!isNaN(ts)) {
+      params = `userId=${userId}&startTs=${ts}&` + params.split('&').slice(1).join('&')
+    } else {
+      params = `userId=${userId}&start=${encodeURIComponent(start)}&` + params.split('&').slice(1).join('&')
+    }
+  }
+  return api.get<BandwidthPoint[]>(`/stats/history?${params}`).then(r => r.data)
+}
 
 // Config
 export const getConfig = () => api.get('/config').then(r => r.data)

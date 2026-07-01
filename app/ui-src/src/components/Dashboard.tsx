@@ -12,7 +12,6 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [users, setUsers] = useState<User[]>([])
   const [timeRange, setTimeRange] = useState('1h')
   const chartBuf = useRef<any[]>([])
-  const lastTs = useRef<string>('')
   const firstLoad = useRef(true)
 
   const loadData = useCallback(async () => {
@@ -33,21 +32,18 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
           rx: p.rxSpeed || 0,
           tx: p.txSpeed || 0,
         }))
-        if (h?.length > 0) {
-          lastTs.current = h[h.length - 1].timestamp
-        }
       } else {
-        if (!lastTs.current) return
-        const newPts = await getStatsHistory(0, '', '', lastTs.current)
+        // 每秒拉取最近 10 秒原始数据
+        const tenSecAgo = new Date(Date.now() - 10000).toISOString()
+        const newPts = await getStatsHistory(0, tenSecAgo, '', 'true')
         if (newPts?.length > 0) {
           const buf = chartBuf.current
+          const seen = new Set(buf.map(p => p.time))
           for (const p of newPts) {
-            buf.push({
-              time: new Date(p.timestamp).toLocaleTimeString(),
-              rx: p.rxSpeed || 0,
-              tx: p.txSpeed || 0,
-            })
-            lastTs.current = p.timestamp
+            const time = new Date(p.timestamp).toLocaleTimeString()
+            if (seen.has(time)) continue
+            seen.add(time)
+            buf.push({ time, rx: p.rxSpeed || 0, tx: p.txSpeed || 0 })
           }
           if (buf.length > 200) buf.splice(0, buf.length - 200)
           setHistory([...buf])
@@ -61,7 +57,6 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   useEffect(() => {
     firstLoad.current = true
     chartBuf.current = []
-    lastTs.current = ''
     loadData()
     const timer = setInterval(loadData, 1000)
     return () => clearInterval(timer)

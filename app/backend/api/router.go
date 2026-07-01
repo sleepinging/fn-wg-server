@@ -48,7 +48,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.59"
+var Version = "1.0.60"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -551,22 +551,31 @@ func handleUserTraffic(w http.ResponseWriter, r *http.Request, userID int) {
 	// Get chart data
 	startTime := r.URL.Query().Get("start")
 	endTime := r.URL.Query().Get("end")
-	since := r.URL.Query().Get("since")
+	raw := r.URL.Query().Get("raw")
 	aggregate := r.URL.Query().Get("aggregate")
+
+	// 支持数值时间戳（毫秒）
+	if ts := r.URL.Query().Get("startTs"); ts != "" {
+		var sec int64
+		fmt.Sscanf(ts, "%d", &sec)
+		if sec > 0 {
+			startTime = time.UnixMilli(sec).In(time.Local).Format("2006-01-02 15:04:05")
+		}
+	}
+
+	maxPoints := 100
+	if raw == "true" {
+		maxPoints = 0
+	}
 
 	var points []db.BandwidthPoint
 	var ptsErr error
 
-	if since != "" {
-		// 增量拉取：since 之后的所有原始数据，不采样
-		points, ptsErr = db.GetBandwidthHistoryAgg(userID, since, endTime, 0, "")
-	} else {
-		// 全量拉取：采样最多 100 个点
-		if aggregate == "" {
-			aggregate = "max"
-		}
-		points, ptsErr = db.GetBandwidthHistoryAgg(userID, startTime, endTime, 100, aggregate)
+	if aggregate == "" && maxPoints > 0 {
+		aggregate = "max"
 	}
+	points, ptsErr = db.GetBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, aggregate)
+
 	if ptsErr != nil {
 		writeError(w, http.StatusInternalServerError, ptsErr.Error())
 		return
@@ -644,29 +653,35 @@ func handleStatsHistory(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(uid, "%d", &userID)
 	}
 
-	since := r.URL.Query().Get("since")
 	startTime := r.URL.Query().Get("start")
 	endTime := r.URL.Query().Get("end")
+	raw := r.URL.Query().Get("raw")
 	aggregate := r.URL.Query().Get("aggregate")
 
-	var points []db.BandwidthPoint
-	var err error
-
-	if since != "" {
-		points, err = db.GetBandwidthHistoryAgg(userID, since, endTime, 0, "")
-	} else {
-		if aggregate == "" {
-			aggregate = "max"
+	if ts := r.URL.Query().Get("startTs"); ts != "" {
+		var sec int64
+		fmt.Sscanf(ts, "%d", &sec)
+		if sec > 0 {
+			startTime = time.UnixMilli(sec).In(time.Local).Format("2006-01-02 15:04:05")
 		}
-		if startTime == "" {
-			startTime = time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")
-		}
-		if endTime == "" {
-			endTime = time.Now().Format("2006-01-02 15:04:05")
-		}
-		points, err = db.GetBandwidthHistoryAgg(userID, startTime, endTime, 100, aggregate)
 	}
 
+	maxPoints := 100
+	if raw == "true" {
+		maxPoints = 0
+	}
+	if aggregate == "" && maxPoints > 0 {
+		aggregate = "max"
+	}
+
+	if startTime == "" {
+		startTime = time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")
+	}
+	if endTime == "" {
+		endTime = time.Now().Format("2006-01-02 15:04:05")
+	}
+
+	points, err := db.GetBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, aggregate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

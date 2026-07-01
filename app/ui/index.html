@@ -10255,9 +10255,31 @@ const createUser = (data) => api.post("/users", data).then((r2) => r2.data);
 const deleteUser = (id2) => api.delete(`/users/${id2}`).then((r2) => r2.data);
 const getUserStats = (id2) => api.get(`/users/${id2}/stats`).then((r2) => r2.data);
 const getUserHistory = (id2, page = 1, pageSize = 20) => api.get(`/users/${id2}/history?page=${page}&pageSize=${pageSize}`).then((r2) => r2.data);
-const getUserTraffic = (id2, start = "", end = "", since = "") => api.get(`/users/${id2}/traffic?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&since=${encodeURIComponent(since)}`).then((r2) => r2.data);
+const getUserTraffic = (id2, start = "", end = "", raw = "") => {
+  let params = `end=${encodeURIComponent(end)}&raw=${raw}`;
+  if (start) {
+    const ts = new Date(start).getTime();
+    if (!isNaN(ts)) {
+      params = `startTs=${ts}&` + params;
+    } else {
+      params = `start=${encodeURIComponent(start)}&` + params;
+    }
+  }
+  return api.get(`/users/${id2}/traffic?${params}`).then((r2) => r2.data);
+};
 const getStats = () => api.get("/stats").then((r2) => r2.data);
-const getStatsHistory = (userId = 0, start = "", end = "", since = "") => api.get(`/stats/history?userId=${userId}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&since=${encodeURIComponent(since)}`).then((r2) => r2.data);
+const getStatsHistory = (userId = 0, start = "", end = "", raw = "") => {
+  let params = `userId=${userId}&end=${encodeURIComponent(end)}&raw=${raw}`;
+  if (start) {
+    const ts = new Date(start).getTime();
+    if (!isNaN(ts)) {
+      params = `userId=${userId}&startTs=${ts}&` + params.split("&").slice(1).join("&");
+    } else {
+      params = `userId=${userId}&start=${encodeURIComponent(start)}&` + params.split("&").slice(1).join("&");
+    }
+  }
+  return api.get(`/stats/history?${params}`).then((r2) => r2.data);
+};
 const getConfig = () => api.get("/config").then((r2) => r2.data);
 const updateConfig = (data) => api.put("/config", data).then((r2) => r2.data);
 const exportBackup = () => api.get("/config/backup", { responseType: "blob" }).then((r2) => r2.data);
@@ -31934,7 +31956,6 @@ const Dashboard = ({ onViewUser }) => {
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
   const chartBuf = reactExports.useRef([]);
-  const lastTs = reactExports.useRef("");
   const firstLoad = reactExports.useRef(true);
   const loadData = reactExports.useCallback(async () => {
     try {
@@ -31953,21 +31974,17 @@ const Dashboard = ({ onViewUser }) => {
           rx: p2.rxSpeed || 0,
           tx: p2.txSpeed || 0
         }));
-        if ((h2 == null ? void 0 : h2.length) > 0) {
-          lastTs.current = h2[h2.length - 1].timestamp;
-        }
       } else {
-        if (!lastTs.current) return;
-        const newPts = await getStatsHistory(0, "", "", lastTs.current);
+        const tenSecAgo = new Date(Date.now() - 1e4).toISOString();
+        const newPts = await getStatsHistory(0, tenSecAgo, "", "true");
         if ((newPts == null ? void 0 : newPts.length) > 0) {
           const buf = chartBuf.current;
+          const seen = new Set(buf.map((p2) => p2.time));
           for (const p2 of newPts) {
-            buf.push({
-              time: new Date(p2.timestamp).toLocaleTimeString(),
-              rx: p2.rxSpeed || 0,
-              tx: p2.txSpeed || 0
-            });
-            lastTs.current = p2.timestamp;
+            const time2 = new Date(p2.timestamp).toLocaleTimeString();
+            if (seen.has(time2)) continue;
+            seen.add(time2);
+            buf.push({ time: time2, rx: p2.rxSpeed || 0, tx: p2.txSpeed || 0 });
           }
           if (buf.length > 200) buf.splice(0, buf.length - 200);
           setHistory([...buf]);
@@ -31980,7 +31997,6 @@ const Dashboard = ({ onViewUser }) => {
   reactExports.useEffect(() => {
     firstLoad.current = true;
     chartBuf.current = [];
-    lastTs.current = "";
     loadData();
     const timer = setInterval(loadData, 1e3);
     return () => clearInterval(timer);
@@ -32351,12 +32367,10 @@ const UserDetail = ({ userId, onBack }) => {
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
   const chartPoints = reactExports.useRef([]);
-  const lastTimestamp = reactExports.useRef("");
   const isFirstLoad = reactExports.useRef(true);
   reactExports.useEffect(() => {
     isFirstLoad.current = true;
     chartPoints.current = [];
-    lastTimestamp.current = "";
     loadData();
     const timer = setInterval(loadData, 1e3);
     return () => clearInterval(timer);
@@ -32382,28 +32396,26 @@ const UserDetail = ({ userId, onBack }) => {
             rxBytes: p2.rxBytes || 0,
             txBytes: p2.txBytes || 0
           }));
-          lastTimestamp.current = t2.chart[t2.chart.length - 1].timestamp;
         }
       } else {
-        const since = lastTimestamp.current;
-        if (!since) return;
-        const t2 = await getUserTraffic(userId, "", "", since);
+        const tenSecAgo = new Date(Date.now() - 1e4).toISOString();
+        const t2 = await getUserTraffic(userId, tenSecAgo, "", "true");
         if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
           const buf = chartPoints.current;
+          const seen = new Set(buf.map((p2) => p2.time));
           for (const p2 of t2.chart) {
-            const pt = {
-              time: new Date(p2.timestamp).toLocaleTimeString(),
+            const time2 = new Date(p2.timestamp).toLocaleTimeString();
+            if (seen.has(time2)) continue;
+            seen.add(time2);
+            buf.push({
+              time: time2,
               rxSpeed: p2.rxSpeed || 0,
               txSpeed: p2.txSpeed || 0,
               rxBytes: p2.rxBytes || 0,
               txBytes: p2.txBytes || 0
-            };
-            buf.push(pt);
-            lastTimestamp.current = p2.timestamp;
+            });
           }
-          if (buf.length > 200) {
-            buf.splice(0, buf.length - 200);
-          }
+          if (buf.length > 200) buf.splice(0, buf.length - 200);
           setTraffic({ ...t2, chart: buf });
         }
       }

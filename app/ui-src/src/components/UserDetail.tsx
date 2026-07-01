@@ -16,13 +16,11 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
   const chartPoints = useRef<any[]>([])
-  const lastTimestamp = useRef<string>('')
   const isFirstLoad = useRef(true)
 
   useEffect(() => {
     isFirstLoad.current = true
     chartPoints.current = []
-    lastTimestamp.current = ''
     loadData()
     const timer = setInterval(loadData, 1000)
     return () => clearInterval(timer)
@@ -50,31 +48,27 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
             rxBytes: p.rxBytes || 0,
             txBytes: p.txBytes || 0,
           }))
-          lastTimestamp.current = t.chart[t.chart.length - 1].timestamp
         }
       } else {
-        // 增量：只拉取新数据
-        const since = lastTimestamp.current
-        if (!since) return
-        const t = await getUserTraffic(userId, '', '', since)
+        // 每秒拉取最近 10 秒的原始数据
+        const tenSecAgo = new Date(Date.now() - 10000).toISOString()
+        const t = await getUserTraffic(userId, tenSecAgo, '', 'true')
         if (t?.chart?.length > 0) {
           const buf = chartPoints.current
+          const seen = new Set(buf.map(p => p.time))
           for (const p of t.chart) {
-            const pt = {
-              time: new Date(p.timestamp).toLocaleTimeString(),
+            const time = new Date(p.timestamp).toLocaleTimeString()
+            if (seen.has(time)) continue
+            seen.add(time)
+            buf.push({
+              time,
               rxSpeed: p.rxSpeed || 0,
               txSpeed: p.txSpeed || 0,
               rxBytes: p.rxBytes || 0,
               txBytes: p.txBytes || 0,
-            }
-            buf.push(pt)
-            lastTimestamp.current = p.timestamp
+            })
           }
-          // 保留最近 200 点
-          if (buf.length > 200) {
-            buf.splice(0, buf.length - 200)
-          }
-          // 触发重渲染
+          if (buf.length > 200) buf.splice(0, buf.length - 200)
           setTraffic({ ...t, chart: buf })
         }
       }
