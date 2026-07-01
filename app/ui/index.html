@@ -32016,8 +32016,8 @@ const Dashboard = ({ onViewUser }) => {
         /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "time", fontSize: 12 }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(YAxis, { fontSize: 12, tickFormatter: (v2) => formatSpeed(v2) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { formatter: (value) => [formatSpeed(value), ""] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rx", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "tx", stroke: "#FF9800", strokeWidth: 2, name: "上传", dot: false })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rx", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false, isAnimationActive: false }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "tx", stroke: "#FF9800", strokeWidth: 2, name: "上传", dot: false, isAnimationActive: false })
       ] }) })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "online-users-section", children: [
@@ -32469,8 +32469,8 @@ const UserDetail = ({ userId, onBack }) => {
         /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "time", fontSize: 12 }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(YAxis, { fontSize: 12, tickFormatter: (v2) => formatSpeed(v2) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { formatter: (value) => [formatSpeed(value), ""] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rxSpeed", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "txSpeed", stroke: "#FF9800", strokeWidth: 2, name: "上传", dot: false })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rxSpeed", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false, isAnimationActive: false }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "txSpeed", stroke: "#FF9800", strokeWidth: 2, name: "上传", dot: false, isAnimationActive: false })
       ] }) })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "history-section", children: [

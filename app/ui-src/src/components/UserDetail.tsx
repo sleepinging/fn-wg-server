@@ -174,8 +174,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
             <XAxis dataKey="time" fontSize={12} />
             <YAxis fontSize={12} tickFormatter={v => formatSpeed(v)} />
             <Tooltip formatter={(value: number) => [formatSpeed(value), '']} />
-            <Line type="monotone" dataKey="rxSpeed" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} />
-            <Line type="monotone" dataKey="txSpeed" stroke="#FF9800" strokeWidth={2} name="上传" dot={false} />
+            <Line type="monotone" dataKey="rxSpeed" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="txSpeed" stroke="#FF9800" strokeWidth={2} name="上传" dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
