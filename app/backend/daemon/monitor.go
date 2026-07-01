@@ -32,8 +32,6 @@ type Monitor struct {
 
 // NewMonitor creates a new bandwidth monitor.
 func NewMonitor(interfaceName, dataDir string) *Monitor {
-	// 设置对等端缓存目录，供 CGI 读取
-	wg.SetPeersCacheDir(dataDir)
 	return &Monitor{
 		interfaceName:     interfaceName,
 		dataDir:           dataDir,
@@ -100,14 +98,35 @@ func (m *Monitor) collectLoop() {
 	m.lastRx, m.lastTx, _ = wg.GetInterfaceTransfer(m.interfaceName)
 	m.lastTime = time.Now()
 
+	// 启动时自动同步 DB 用户到 WireGuard 内核（防止之前新增用户时守护进程不在线）
+	m.syncConfig()
+
 	for {
 		select {
 		case <-m.stopCh:
 			return
 		case <-ticker.C:
 			m.collect()
-			m.checkConfigTrigger()
 		}
+	}
+}
+
+// syncConfig 读取 DB 配置和用户，同步到 WireGuard 内核
+func (m *Monitor) syncConfig() {
+	cfg, err := wg.LoadConfig()
+	if err != nil {
+		log.Printf("syncConfig: load config error: %v", err)
+		return
+	}
+	users, err := db.ListUsers()
+	if err != nil {
+		log.Printf("syncConfig: list users error: %v", err)
+		return
+	}
+	if err := wg.ApplyConfig(*cfg, users); err != nil {
+		log.Printf("syncConfig: apply config error: %v", err)
+	} else {
+		log.Printf("syncConfig: synced %d users to WireGuard", len(users))
 	}
 }
 
@@ -208,9 +227,7 @@ func (m *Monitor) collectPerUserBandwidth() {
 		return
 	}
 
-	if err := wg.SavePeersToCache(peers); err != nil {
-		log.Printf("SavePeersToCache error: %v", err)
-	}
+	wg.SavePeersToCache(peers)
 
 	users, err := db.ListUsers()
 	if err != nil {

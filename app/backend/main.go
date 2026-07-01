@@ -19,7 +19,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.60"
+const Version = "1.0.62"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -39,9 +39,6 @@ func main() {
 
 	// Set version for API module
 	api.Version = Version
-
-	// 设置对等端缓存目录
-	wg.SetPeersCacheDir(dataDir)
 
 	// Check for daemon mode
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {

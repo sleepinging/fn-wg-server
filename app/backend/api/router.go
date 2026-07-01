@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"wg-server/db"
-	"wg-server/daemon"
 	"wg-server/wg"
 )
 
@@ -48,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.60"
+var Version = "1.0.62"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -923,11 +922,11 @@ func serviceStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func serviceStart(w http.ResponseWriter, r *http.Request) {
-	// 通知守护进程初始化 WireGuard 接口（包含 sysctl、ip link、wg 配置等）
-	// 守护进程由生命周期脚本（root）启动，CGI 只负责写触发文件
-	dataDir := os.Getenv("TRIM_PKGVAR")
-	if dataDir != "" {
-		daemon.WriteConfigTrigger(dataDir, "init")
+	// 直接初始化 WireGuard 接口（daemon 有 root 权限）
+	exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
+	if err := wg.InitInterface(); err != nil {
+		writeError(w, http.StatusInternalServerError, "init interface: "+err.Error())
+		return
 	}
 
 	db.Log("INFO", "WireGuard service started")
@@ -935,11 +934,10 @@ func serviceStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func serviceStop(w http.ResponseWriter, r *http.Request) {
-	// 通知守护进程关闭 WireGuard 接口
-	dataDir := os.Getenv("TRIM_PKGVAR")
-	if dataDir != "" {
-		daemon.WriteConfigTrigger(dataDir, "stop")
-	}
+	// 直接关闭 WireGuard 接口（daemon 有 root 权限）
+	interfaceName := getInterfaceName()
+	exec.Command("ip", "link", "set", "dev", interfaceName, "down").Run()
+	exec.Command("ip", "link", "delete", "dev", interfaceName).Run()
 
 	db.Log("INFO", "WireGuard service stopped")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "service stopped"})
@@ -1160,64 +1158,31 @@ func execCommand(name string, args ...string) string {
 }
 
 func applyWGConfig() error {
-	// CGI 进程没有 CAP_NET_ADMIN 权限，无法直接配置 WireGuard。
-	// 通过触发文件告知守护进程（以 root 运行）去执行配置。
-	dataDir := os.Getenv("TRIM_PKGVAR")
-	if dataDir == "" {
-		return fmt.Errorf("TRIM_PKGVAR not set")
+	// 所有 API 请求现在都经过 daemon Unix socket（root 权限），可以直接调用 wgctrl
+	cfg, err := wg.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
-	return daemon.WriteConfigTrigger(dataDir, "apply")
+	users, err := db.ListUsers()
+	if err != nil {
+		return fmt.Errorf("list users: %w", err)
+	}
+	return wg.ApplyConfig(*cfg, users)
 }
 
 func isMonitorRunning() bool {
-	pidPath := filepath.Join(os.Getenv("TRIM_PKGVAR"), "monitor.pid")
-	if pidPath == filepath.Join("", "monitor.pid") {
-		home, _ := os.UserHomeDir()
-		pidPath = filepath.Join(home, ".wg-server", "monitor.pid")
-	}
-	data, err := os.ReadFile(pidPath)
-	if err != nil {
-		return false
-	}
-	var pid int
-	fmt.Sscanf(string(data), "%d", &pid)
-	if pid <= 0 {
-		return false
-	}
-	// Check if process exists
-	_, err = os.Stat(fmt.Sprintf("/proc/%d", pid))
-	return err == nil
-}
-
-func startMonitor() {
-	exe, _ := os.Executable()
+	// 直接检查 daemon socket 是否可达（不走文件）
 	dataDir := os.Getenv("TRIM_PKGVAR")
 	if dataDir == "" {
-		home, _ := os.UserHomeDir()
-		dataDir = filepath.Join(home, ".wg-server")
+		return false
 	}
-	cmd := exec.Command(exe, "daemon")
-	cmd.Env = append(os.Environ(), "TRIM_PKGVAR="+dataDir)
-	cmd.Start()
-	// Don't wait, let it run in background
-}
-
-func stopMonitor() {
-	pidPath := filepath.Join(os.Getenv("TRIM_PKGVAR"), "monitor.pid")
-	if pidPath == filepath.Join("", "monitor.pid") {
-		home, _ := os.UserHomeDir()
-		pidPath = filepath.Join(home, ".wg-server", "monitor.pid")
-	}
-	data, err := os.ReadFile(pidPath)
+	sockPath := filepath.Join(dataDir, "daemon.sock")
+	conn, err := net.DialTimeout("unix", sockPath, 100*time.Millisecond)
 	if err != nil {
-		return
+		return false
 	}
-	var pid int
-	fmt.Sscanf(string(data), "%d", &pid)
-	if pid > 0 {
-		exec.Command("kill", fmt.Sprintf("%d", pid)).Run()
-		os.Remove(pidPath)
-	}
+	conn.Close()
+	return true
 }
 
 func setAutoStart(enabled bool) {

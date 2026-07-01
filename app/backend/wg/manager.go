@@ -3,14 +3,13 @@ package wg
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/curve25519"
 	"golang.zx2c4.com/wireguard/wgctrl"
@@ -334,41 +333,28 @@ func GetPeersFromWgctl(interfaceName string) ([]PeerInfo, error) {
 	return peers, nil
 }
 
-// SetPeersCacheDir 设置对等端缓存目录（由 daemon 在启动时调用）
-var peersCacheDir string
+// peersCache 内存中的对等端缓存（替代文件缓存，由 daemon 写入、CGI 读取）
+var (
+	peersCache   []PeerInfo
+	peersMu      sync.RWMutex
+)
 
-func SetPeersCacheDir(dir string) {
-	peersCacheDir = dir
-}
-
-// SavePeersToCache 将对等端信息写入缓存文件（由守护进程调用）
+// SavePeersToCache 保存对等端信息到内存缓存（由守护进程调用）
 func SavePeersToCache(peers []PeerInfo) error {
-	if peersCacheDir == "" {
-		return fmt.Errorf("peers cache dir not set")
-	}
-	data, err := json.Marshal(peers)
-	if err != nil {
-		return err
-	}
-	cacheFile := filepath.Join(peersCacheDir, "peers.cache")
-	return os.WriteFile(cacheFile, data, 0644)
+	peersMu.Lock()
+	peersCache = peers
+	peersMu.Unlock()
+	return nil
 }
 
-// GetPeersFromCache 从缓存文件读取对等端信息（由 CGI 调用）
+// GetPeersFromCache 从内存缓存读取对等端信息（由 CGI 调用）
 func GetPeersFromCache(interfaceName string) ([]PeerInfo, error) {
-	if peersCacheDir == "" {
+	peersMu.RLock()
+	defer peersMu.RUnlock()
+	if peersCache == nil {
 		return []PeerInfo{}, nil
 	}
-	cacheFile := filepath.Join(peersCacheDir, "peers.cache")
-	data, err := os.ReadFile(cacheFile)
-	if err != nil {
-		return []PeerInfo{}, nil
-	}
-	var peers []PeerInfo
-	if err := json.Unmarshal(data, &peers); err != nil {
-		return []PeerInfo{}, nil
-	}
-	return peers, nil
+	return peersCache, nil
 }
 
 // getPeersFallback 降级方案：通过 /proc/net/wireguard 读取
