@@ -11,23 +11,57 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [history, setHistory] = useState<BandwidthPoint[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [timeRange, setTimeRange] = useState('1h')
+  const chartBuf = useRef<any[]>([])
+  const lastTs = useRef<string>('')
+  const firstLoad = useRef(true)
 
   const loadData = useCallback(async () => {
     try {
-      const [s, h, u] = await Promise.all([
+      const [s, u] = await Promise.all([
         getStats(),
-        getStatsHistory(0, getStartTime(timeRange), ''),
         getUsers(),
       ])
       setStats(s)
-      setHistory(h)
       setUsers(u)
+
+      if (firstLoad.current) {
+        firstLoad.current = false
+        const h = await getStatsHistory(0, getStartTime(timeRange), '')
+        setHistory(h)
+        chartBuf.current = (h || []).map(p => ({
+          time: new Date(p.timestamp).toLocaleTimeString(),
+          rx: p.rxSpeed || 0,
+          tx: p.txSpeed || 0,
+        }))
+        if (h?.length > 0) {
+          lastTs.current = h[h.length - 1].timestamp
+        }
+      } else {
+        if (!lastTs.current) return
+        const newPts = await getStatsHistory(0, '', '', lastTs.current)
+        if (newPts?.length > 0) {
+          const buf = chartBuf.current
+          for (const p of newPts) {
+            buf.push({
+              time: new Date(p.timestamp).toLocaleTimeString(),
+              rx: p.rxSpeed || 0,
+              tx: p.txSpeed || 0,
+            })
+            lastTs.current = p.timestamp
+          }
+          if (buf.length > 200) buf.splice(0, buf.length - 200)
+          setHistory([...buf])
+        }
+      }
     } catch (e) {
       console.error('Failed to load dashboard data', e)
     }
   }, [timeRange])
 
   useEffect(() => {
+    firstLoad.current = true
+    chartBuf.current = []
+    lastTs.current = ''
     loadData()
     const timer = setInterval(loadData, 1000)
     return () => clearInterval(timer)

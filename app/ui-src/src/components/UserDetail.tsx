@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { getUser, getUserStats, getUserTraffic, getUserConfig, User } from '../api'
 import HistoryTable from './HistoryTable'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Props {
   userId: number
@@ -15,23 +15,69 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = useState('1h')
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
+  const chartPoints = useRef<any[]>([])
+  const lastTimestamp = useRef<string>('')
+  const isFirstLoad = useRef(true)
 
   useEffect(() => {
+    isFirstLoad.current = true
+    chartPoints.current = []
+    lastTimestamp.current = ''
     loadData()
-    const timer = setInterval(loadData, 10000)
+    const timer = setInterval(loadData, 1000)
     return () => clearInterval(timer)
   }, [userId, timeRange])
 
   const loadData = async () => {
     try {
-      const [u, s, t] = await Promise.all([
+      const [u, s] = await Promise.all([
         getUser(userId),
         getUserStats(userId),
-        getUserTraffic(userId, getStartTime(timeRange), ''),
       ])
       setUser(u)
       setStats(s)
-      setTraffic(t)
+
+      if (isFirstLoad.current) {
+        // 首次：全量拉取 100 个采样点
+        isFirstLoad.current = false
+        const t = await getUserTraffic(userId, getStartTime(timeRange), '')
+        setTraffic(t)
+        if (t?.chart?.length > 0) {
+          chartPoints.current = t.chart.map((p: any) => ({
+            time: new Date(p.timestamp).toLocaleTimeString(),
+            rxSpeed: p.rxSpeed || 0,
+            txSpeed: p.txSpeed || 0,
+            rxBytes: p.rxBytes || 0,
+            txBytes: p.txBytes || 0,
+          }))
+          lastTimestamp.current = t.chart[t.chart.length - 1].timestamp
+        }
+      } else {
+        // 增量：只拉取新数据
+        const since = lastTimestamp.current
+        if (!since) return
+        const t = await getUserTraffic(userId, '', '', since)
+        if (t?.chart?.length > 0) {
+          const buf = chartPoints.current
+          for (const p of t.chart) {
+            const pt = {
+              time: new Date(p.timestamp).toLocaleTimeString(),
+              rxSpeed: p.rxSpeed || 0,
+              txSpeed: p.txSpeed || 0,
+              rxBytes: p.rxBytes || 0,
+              txBytes: p.txBytes || 0,
+            }
+            buf.push(pt)
+            lastTimestamp.current = p.timestamp
+          }
+          // 保留最近 200 点
+          if (buf.length > 200) {
+            buf.splice(0, buf.length - 200)
+          }
+          // 触发重渲染
+          setTraffic({ ...t, chart: buf })
+        }
+      }
     } catch (e) {
       console.error('Failed to load user detail', e)
     }

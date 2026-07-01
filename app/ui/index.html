@@ -10255,9 +10255,9 @@ const createUser = (data) => api.post("/users", data).then((r2) => r2.data);
 const deleteUser = (id2) => api.delete(`/users/${id2}`).then((r2) => r2.data);
 const getUserStats = (id2) => api.get(`/users/${id2}/stats`).then((r2) => r2.data);
 const getUserHistory = (id2, page = 1, pageSize = 20) => api.get(`/users/${id2}/history?page=${page}&pageSize=${pageSize}`).then((r2) => r2.data);
-const getUserTraffic = (id2, start = "", end = "") => api.get(`/users/${id2}/traffic?start=${start}&end=${end}`).then((r2) => r2.data);
+const getUserTraffic = (id2, start = "", end = "", since = "") => api.get(`/users/${id2}/traffic?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&since=${encodeURIComponent(since)}`).then((r2) => r2.data);
 const getStats = () => api.get("/stats").then((r2) => r2.data);
-const getStatsHistory = (userId = 0, start = "", end = "") => api.get(`/stats/history?userId=${userId}&start=${start}&end=${end}`).then((r2) => r2.data);
+const getStatsHistory = (userId = 0, start = "", end = "", since = "") => api.get(`/stats/history?userId=${userId}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&since=${encodeURIComponent(since)}`).then((r2) => r2.data);
 const getConfig = () => api.get("/config").then((r2) => r2.data);
 const updateConfig = (data) => api.put("/config", data).then((r2) => r2.data);
 const exportBackup = () => api.get("/config/backup", { responseType: "blob" }).then((r2) => r2.data);
@@ -31933,21 +31933,54 @@ const Dashboard = ({ onViewUser }) => {
   const [history, setHistory] = reactExports.useState([]);
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
+  const chartBuf = useRef([]);
+  const lastTs = useRef("");
+  const firstLoad = useRef(true);
   const loadData = reactExports.useCallback(async () => {
     try {
-      const [s2, h2, u2] = await Promise.all([
+      const [s2, u2] = await Promise.all([
         getStats(),
-        getStatsHistory(0, getStartTime$1(timeRange), ""),
         getUsers()
       ]);
       setStats(s2);
-      setHistory(h2);
       setUsers(u2);
+      if (firstLoad.current) {
+        firstLoad.current = false;
+        const h2 = await getStatsHistory(0, getStartTime$1(timeRange), "");
+        setHistory(h2);
+        chartBuf.current = (h2 || []).map((p2) => ({
+          time: new Date(p2.timestamp).toLocaleTimeString(),
+          rx: p2.rxSpeed || 0,
+          tx: p2.txSpeed || 0
+        }));
+        if ((h2 == null ? void 0 : h2.length) > 0) {
+          lastTs.current = h2[h2.length - 1].timestamp;
+        }
+      } else {
+        if (!lastTs.current) return;
+        const newPts = await getStatsHistory(0, "", "", lastTs.current);
+        if ((newPts == null ? void 0 : newPts.length) > 0) {
+          const buf = chartBuf.current;
+          for (const p2 of newPts) {
+            buf.push({
+              time: new Date(p2.timestamp).toLocaleTimeString(),
+              rx: p2.rxSpeed || 0,
+              tx: p2.txSpeed || 0
+            });
+            lastTs.current = p2.timestamp;
+          }
+          if (buf.length > 200) buf.splice(0, buf.length - 200);
+          setHistory([...buf]);
+        }
+      }
     } catch (e3) {
       console.error("Failed to load dashboard data", e3);
     }
   }, [timeRange]);
   reactExports.useEffect(() => {
+    firstLoad.current = true;
+    chartBuf.current = [];
+    lastTs.current = "";
     loadData();
     const timer = setInterval(loadData, 1e3);
     return () => clearInterval(timer);
@@ -32317,21 +32350,63 @@ const UserDetail = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = reactExports.useState("1h");
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
+  const chartPoints = reactExports.useRef([]);
+  const lastTimestamp = reactExports.useRef("");
+  const isFirstLoad = reactExports.useRef(true);
   reactExports.useEffect(() => {
+    isFirstLoad.current = true;
+    chartPoints.current = [];
+    lastTimestamp.current = "";
     loadData();
-    const timer = setInterval(loadData, 1e4);
+    const timer = setInterval(loadData, 1e3);
     return () => clearInterval(timer);
   }, [userId, timeRange]);
   const loadData = async () => {
+    var _a, _b;
     try {
-      const [u2, s2, t2] = await Promise.all([
+      const [u2, s2] = await Promise.all([
         getUser(userId),
-        getUserStats(userId),
-        getUserTraffic(userId, getStartTime(timeRange), "")
+        getUserStats(userId)
       ]);
       setUser(u2);
       setStats(s2);
-      setTraffic(t2);
+      if (isFirstLoad.current) {
+        isFirstLoad.current = false;
+        const t2 = await getUserTraffic(userId, getStartTime(timeRange), "");
+        setTraffic(t2);
+        if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
+          chartPoints.current = t2.chart.map((p2) => ({
+            time: new Date(p2.timestamp).toLocaleTimeString(),
+            rxSpeed: p2.rxSpeed || 0,
+            txSpeed: p2.txSpeed || 0,
+            rxBytes: p2.rxBytes || 0,
+            txBytes: p2.txBytes || 0
+          }));
+          lastTimestamp.current = t2.chart[t2.chart.length - 1].timestamp;
+        }
+      } else {
+        const since = lastTimestamp.current;
+        if (!since) return;
+        const t2 = await getUserTraffic(userId, "", "", since);
+        if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
+          const buf = chartPoints.current;
+          for (const p2 of t2.chart) {
+            const pt = {
+              time: new Date(p2.timestamp).toLocaleTimeString(),
+              rxSpeed: p2.rxSpeed || 0,
+              txSpeed: p2.txSpeed || 0,
+              rxBytes: p2.rxBytes || 0,
+              txBytes: p2.txBytes || 0
+            };
+            buf.push(pt);
+            lastTimestamp.current = p2.timestamp;
+          }
+          if (buf.length > 200) {
+            buf.splice(0, buf.length - 200);
+          }
+          setTraffic({ ...t2, chart: buf });
+        }
+      }
     } catch (e3) {
       console.error("Failed to load user detail", e3);
     }
