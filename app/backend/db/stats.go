@@ -52,11 +52,26 @@ var bandwidthCacheLock sync.RWMutex
 var lastCacheTime time.Time
 
 // GetBandwidthHistory retrieves bandwidth history for a user.
+// maxPoints 限制返回最大点数（0 表示不限制），超过时均匀采样
 func GetBandwidthHistory(userID int, startTime, endTime string) ([]BandwidthPoint, error) {
+	return GetBandwidthHistoryLimit(userID, startTime, endTime, 0)
+}
+
+// GetBandwidthHistoryLimit 与 GetBandwidthHistory 相同，但限制最大返回点数
+// aggregate 支持 ""（采样）、"max"（窗口内最大值）、"avg"（窗口内平均值）
+func GetBandwidthHistoryLimit(userID int, startTime, endTime string, maxPoints int) ([]BandwidthPoint, error) {
+	return getBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, "")
+}
+
+// GetBandwidthHistoryAgg 支持聚合模式
+func GetBandwidthHistoryAgg(userID int, startTime, endTime string, maxPoints int, aggregate string) ([]BandwidthPoint, error) {
+	return getBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, aggregate)
+}
+
+func getBandwidthHistoryAgg(userID int, startTime, endTime string, maxPoints int, aggregate string) ([]BandwidthPoint, error) {
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
-	// 统一时间格式：前端可能传 ISO 8601（如 2026-07-01T12:36:55Z），DB 存储的是 Asia/Shanghai 格式
 	startTime = normalizeTimeParam(startTime)
 	endTime = normalizeTimeParam(endTime)
 
@@ -89,6 +104,73 @@ func GetBandwidthHistory(userID int, startTime, endTime string) ([]BandwidthPoin
 		p.Timestamp = toLocalTime(p.Timestamp)
 		points = append(points, p)
 	}
+
+	// 均匀采样/聚合：如果点数超过 maxPoints
+	if maxPoints > 0 && len(points) > maxPoints {
+		step := float64(len(points)) / float64(maxPoints)
+		sampled := make([]BandwidthPoint, 0, maxPoints)
+
+		if aggregate == "max" || aggregate == "avg" {
+			// 按窗口聚合
+			for i := 0; i < maxPoints; i++ {
+				startIdx := int(float64(i) * step)
+				endIdx := int(float64(i+1) * step)
+				if endIdx > len(points) {
+					endIdx = len(points)
+				}
+				if startIdx >= len(points) {
+					startIdx = len(points) - 1
+				}
+				if startIdx >= endIdx {
+					continue
+				}
+
+				window := points[startIdx:endIdx]
+				if len(window) == 0 {
+					continue
+				}
+
+				var p BandwidthPoint
+				p.Timestamp = window[0].Timestamp
+				if aggregate == "max" {
+					for _, wp := range window {
+						if wp.RxSpeed > p.RxSpeed {
+							p.RxSpeed = wp.RxSpeed
+						}
+						if wp.TxSpeed > p.TxSpeed {
+							p.TxSpeed = wp.TxSpeed
+						}
+					}
+				} else { // avg
+					var sumRx, sumTx float64
+					for _, wp := range window {
+						sumRx += wp.RxSpeed
+						sumTx += wp.TxSpeed
+					}
+					p.RxSpeed = sumRx / float64(len(window))
+					p.TxSpeed = sumTx / float64(len(window))
+				}
+				// 累计流量取窗口最后一个
+				p.RxBytes = window[len(window)-1].RxBytes
+				p.TxBytes = window[len(window)-1].TxBytes
+				sampled = append(sampled, p)
+			}
+		} else {
+			// 均匀采样
+			for i := 0; i < maxPoints; i++ {
+				idx := int(float64(i) * step)
+				if idx >= len(points) {
+					idx = len(points) - 1
+				}
+				sampled = append(sampled, points[idx])
+			}
+			if len(sampled) > 0 && sampled[len(sampled)-1].Timestamp != points[len(points)-1].Timestamp {
+				sampled[len(sampled)-1] = points[len(points)-1]
+			}
+		}
+		return sampled, nil
+	}
+
 	return points, nil
 }
 

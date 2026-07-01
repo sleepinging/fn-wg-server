@@ -12,7 +12,7 @@ const cgiBasePath = (() => {
   return '';
 })();
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: cgiBasePath + '/api',
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },

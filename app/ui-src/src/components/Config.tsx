@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getConfig, updateConfig, exportBackup, restoreBackup, startService, stopService, getServiceStatus } from '../api'
+import { getConfig, updateConfig, exportBackup, restoreBackup, startService, stopService, getServiceStatus, api } from '../api'
 
 const Config: React.FC = () => {
   const [config, setConfig] = useState<any>(null)
@@ -197,9 +197,25 @@ const Config: React.FC = () => {
         </button>
         <button className="btn" onClick={handleExport}>导出备份</button>
         <button className="btn" onClick={handleRestore}>恢复备份</button>
+        <button className="btn btn-success" onClick={handleExportAll}>导出全部</button>
       </div>
     </div>
   )
+
+  const handleExportAll = async () => {
+    try {
+      const res = await api.get('/config/export-all')
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `wg-server-full-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('导出失败')
+    }
+  }
 }
 
 export default Config

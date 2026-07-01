@@ -28,6 +28,7 @@ func NewRouter() *http.ServeMux {
 	mux.HandleFunc("/api/config", handleConfig)
 	mux.HandleFunc("/api/config/backup", handleConfigBackup)
 	mux.HandleFunc("/api/config/restore", handleConfigRestore)
+	mux.HandleFunc("/api/config/export-all", handleExportAll)
 	mux.HandleFunc("/api/service/", handleService)
 	mux.HandleFunc("/api/system", handleSystem)
 	mux.HandleFunc("/api/wg/kernel", handleWGKernel)
@@ -47,7 +48,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.48"
+var Version = "1.0.49"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -547,10 +548,14 @@ func handleUserTraffic(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	// Get chart data
+	// Get chart data（均匀采样最多 100 个点，避免网络和渲染压力）
 	startTime := r.URL.Query().Get("start")
 	endTime := r.URL.Query().Get("end")
-	points, err := db.GetBandwidthHistory(userID, startTime, endTime)
+	aggregate := r.URL.Query().Get("aggregate")
+	if aggregate == "" {
+		aggregate = "max" // 默认最大值
+	}
+	points, err := db.GetBandwidthHistoryAgg(userID, startTime, endTime, 100, aggregate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -627,8 +632,11 @@ func handleStatsHistory(w http.ResponseWriter, r *http.Request) {
 
 	startTime := r.URL.Query().Get("start")
 	endTime := r.URL.Query().Get("end")
+	aggregate := r.URL.Query().Get("aggregate")
+	if aggregate == "" {
+		aggregate = "max"
+	}
 
-	// Determine time range
 	if startTime == "" {
 		startTime = time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")
 	}
@@ -636,7 +644,7 @@ func handleStatsHistory(w http.ResponseWriter, r *http.Request) {
 		endTime = time.Now().Format("2006-01-02 15:04:05")
 	}
 
-	points, err := db.GetBandwidthHistory(userID, startTime, endTime)
+	points, err := db.GetBandwidthHistoryAgg(userID, startTime, endTime, 100, aggregate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -788,6 +796,47 @@ func handleConfigRestore(w http.ResponseWriter, r *http.Request) {
 
 	db.Log("INFO", "Configuration backup restored")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "backup restored"})
+}
+
+func handleExportAll(w http.ResponseWriter, r *http.Request) {
+	all, _ := db.GetAllConfig()
+	users, _ := db.ListUsers()
+
+	// 为每个用户获取带宽历史（最近 100 个点）和连接历史
+	userDetails := make([]map[string]interface{}, 0)
+	for _, u := range users {
+		history, _, _ := db.GetUserHistory(u.ID, 1, 100)
+		bandwidth, _ := db.GetBandwidthHistoryLimit(u.ID, "", "", 100)
+		detail := map[string]interface{}{
+			"id":              u.ID,
+			"username":        u.Username,
+			"publicKey":       u.PublicKey,
+			"allowedIPs":      u.AllowedIPs,
+			"internalIP":      u.InternalIP,
+			"dns":             u.DNS,
+			"mtu":             u.MTU,
+			"persistentKeepalive": u.PersistentKeepalive,
+			"enabled":         u.Enabled,
+			"createdAt":       u.CreatedAt,
+			"updatedAt":       u.UpdatedAt,
+			"connectionHistory": history,
+			"bandwidthSamples":   bandwidth,
+		}
+		userDetails = append(userDetails, detail)
+	}
+
+	export := map[string]interface{}{
+		"version":   Version,
+		"timestamp": time.Now().Format(time.RFC3339),
+		"config":    all,
+		"users":     userDetails,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=wg-server-full-export.json")
+	json.NewEncoder(w).Encode(export)
+
+	db.Log("INFO", "Full export downloaded")
 }
 
 // ==================== Service ====================
