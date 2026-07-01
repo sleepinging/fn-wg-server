@@ -56,6 +56,10 @@ func GetBandwidthHistory(userID int, startTime, endTime string) ([]BandwidthPoin
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
+	// 统一时间格式：前端可能传 ISO 8601（如 2026-07-01T12:36:55Z），DB 存储的是 Asia/Shanghai 格式
+	startTime = normalizeTimeParam(startTime)
+	endTime = normalizeTimeParam(endTime)
+
 	query := `SELECT timestamp, rx_bytes, tx_bytes, rx_speed, tx_speed 
 		FROM bandwidth_history WHERE user_id = ?`
 	args := []interface{}{userID}
@@ -155,4 +159,30 @@ func GetCurrentBandwidthStats() (map[int]*BandwidthPoint, error) {
 		stats[uid] = &p
 	}
 	return stats, nil
+}
+
+// normalizeTimeParam 统一时间参数格式
+// 前端可能传 ISO 8601（如 2026-07-01T12:36:55.000Z），DB 存储的是 Asia/Shanghai YYYY-MM-DD HH:MM:SS
+func normalizeTimeParam(t string) string {
+	if t == "" {
+		return t
+	}
+	var parsed time.Time
+	var err error
+	formats := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05.000Z",
+	}
+	for _, f := range formats {
+		parsed, err = time.Parse(f, t)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return t
+	}
+	return parsed.In(time.Local).Format("2006-01-02 15:04:05")
 }

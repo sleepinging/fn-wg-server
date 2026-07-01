@@ -199,8 +199,14 @@ func GetUserTotalTraffic(userID int) (rx int64, tx int64, err error) {
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
-	err = db.QueryRow(`SELECT COALESCE(SUM(rx_bytes),0), COALESCE(SUM(tx_bytes),0) 
-		FROM connection_log WHERE user_id = ?`, userID).Scan(&rx, &tx)
+	// 从 bandwidth_history 获取最新一条记录的累计流量
+	err = db.QueryRow(`SELECT rx_bytes, tx_bytes FROM bandwidth_history 
+		WHERE user_id = ? ORDER BY id DESC LIMIT 1`, userID).Scan(&rx, &tx)
+	if err == sql.ErrNoRows {
+		err = nil
+		rx = 0
+		tx = 0
+	}
 	return
 }
 
