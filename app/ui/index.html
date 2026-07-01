@@ -31933,9 +31933,9 @@ const Dashboard = ({ onViewUser }) => {
   const [history, setHistory] = reactExports.useState([]);
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
-  const chartBuf = useRef([]);
-  const lastTs = useRef("");
-  const firstLoad = useRef(true);
+  const chartBuf = reactExports.useRef([]);
+  const lastTs = reactExports.useRef("");
+  const firstLoad = reactExports.useRef(true);
   const loadData = reactExports.useCallback(async () => {
     try {
       const [s2, u2] = await Promise.all([
