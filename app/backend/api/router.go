@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.36"
+var Version = "1.0.37"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -190,7 +190,7 @@ func listUsers(w http.ResponseWriter, r *http.Request) {
 
 		// Add online status and traffic from peer info
 		if peer, ok := peerMap[u.PublicKey]; ok {
-			item["online"] = peer.LatestHandshake > 0
+			item["online"] = peer.LatestHandshake > 0 || peer.TransferRx > 0 || peer.TransferTx > 0
 			item["rxBytes"] = peer.TransferRx
 			item["txBytes"] = peer.TransferTx
 			item["endpoint"] = peer.Endpoint
@@ -490,7 +490,7 @@ func handleUserStats(w http.ResponseWriter, r *http.Request, userID int) {
 
 	for _, p := range peers {
 		if p.PublicKey == user.PublicKey {
-			stats["online"] = p.LatestHandshake > 0
+			stats["online"] = p.LatestHandshake > 0 || p.TransferRx > 0 || p.TransferTx > 0
 			stats["rxBytes"] = p.TransferRx
 			stats["txBytes"] = p.TransferTx
 			stats["endpoint"] = p.Endpoint

@@ -17,7 +17,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.36"
+const Version = "1.0.37"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -56,6 +56,9 @@ func main() {
 		handleCommand(os.Args[1])
 		return
 	}
+
+	// Set peers cache directory (shared between daemon and CGI)
+	wg.SetPeersCacheDir(dataDir)
 
 	// Check if running as CGI
 	if os.Getenv("GATEWAY_INTERFACE") != "" {

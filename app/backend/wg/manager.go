@@ -316,11 +316,16 @@ func GetPeersFromWgctl(interfaceName string) ([]PeerInfo, error) {
 		for _, aip := range p.AllowedIPs {
 			allowedIPs = append(allowedIPs, aip.String())
 		}
+		// 处理零值 handshake 时间（wgctrl 返回 time.Time{} 时 Unix() 为负值）
+		hs := int64(0)
+		if !p.LastHandshakeTime.IsZero() {
+			hs = p.LastHandshakeTime.Unix()
+		}
 		peers = append(peers, PeerInfo{
 			PublicKey:       p.PublicKey.String(),
 			Endpoint:        p.Endpoint.String(),
 			AllowedIPs:      strings.Join(allowedIPs, ","),
-			LatestHandshake: p.LastHandshakeTime.Unix(),
+			LatestHandshake: hs,
 			TransferRx:      p.ReceiveBytes,
 			TransferTx:      p.TransmitBytes,
 			PersistentKeepalive: int(p.PersistentKeepaliveInterval.Seconds()),
