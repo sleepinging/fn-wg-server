@@ -182,15 +182,18 @@ func WriteConfigTrigger(dataDir, action string) error {
 	return os.WriteFile(triggerFile, []byte(action), 0644)
 }
 
+// per-user 上次流量值，用于计算实时速度
+var lastUserRx = make(map[int]int64)
+var lastUserTx = make(map[int]int64)
+var lastUserTime = time.Now()
+
 func (m *Monitor) collectPerUserBandwidth() {
-	// 守护进程以 root 权限运行，可以直接使用 wgctrl 读取对等端信息
 	peers, err := wg.GetPeersFromWgctl(m.interfaceName)
 	if err != nil {
 		log.Printf("GetPeersFromWgctl error: %v", err)
 		return
 	}
 
-	// 保存到缓存文件供 CGI 读取
 	if err := wg.SavePeersToCache(peers); err != nil {
 		log.Printf("SavePeersToCache error: %v", err)
 	}
@@ -205,14 +208,33 @@ func (m *Monitor) collectPerUserBandwidth() {
 		pubKeyToUser[u.PublicKey] = u.ID
 	}
 
+	now := time.Now()
+	elapsed := now.Sub(lastUserTime).Seconds()
+	if elapsed <= 0 {
+		elapsed = 1
+	}
+
 	for _, peer := range peers {
 		userID, exists := pubKeyToUser[peer.PublicKey]
 		if !exists {
 			continue
 		}
 
-		if err := db.SaveBandwidthPoint(userID, peer.TransferRx, peer.TransferTx, 0, 0); err != nil {
+		// 计算实时速度
+		rxSpeed := float64(0)
+		txSpeed := float64(0)
+		if prevRx, ok := lastUserRx[userID]; ok {
+			rxSpeed = math.Max(0, float64(peer.TransferRx-prevRx)/elapsed)
+		}
+		if prevTx, ok := lastUserTx[userID]; ok {
+			txSpeed = math.Max(0, float64(peer.TransferTx-prevTx)/elapsed)
+		}
+		lastUserRx[userID] = peer.TransferRx
+		lastUserTx[userID] = peer.TransferTx
+
+		if err := db.SaveBandwidthPoint(userID, peer.TransferRx, peer.TransferTx, rxSpeed, txSpeed); err != nil {
 			log.Printf("Failed to save user bandwidth (user %d): %v", userID, err)
 		}
 	}
+	lastUserTime = now
 }

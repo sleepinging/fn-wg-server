@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.43"
+var Version = "1.0.45"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -188,7 +188,7 @@ func listUsers(w http.ResponseWriter, r *http.Request) {
 			"updatedAt":           u.UpdatedAt,
 		}
 
-		// Add online status and traffic from peer info
+		// Add online status, traffic and speed from peer info
 		if peer, ok := peerMap[u.PublicKey]; ok {
 			item["online"] = peer.LatestHandshake > 0 || peer.TransferRx > 0 || peer.TransferTx > 0
 			item["rxBytes"] = peer.TransferRx
@@ -198,10 +198,20 @@ func listUsers(w http.ResponseWriter, r *http.Request) {
 			if peer.LatestHandshake > 0 {
 				item["onlineSince"] = time.Unix(int64(peer.LatestHandshake), 0).Format("2006-01-02 15:04:05")
 			}
+			// 实时带宽（从带宽历史记录取最新速度）
+			if point, err := db.GetLatestBandwidth(u.ID); err == nil && point != nil {
+				item["rxSpeed"] = point.RxSpeed
+				item["txSpeed"] = point.TxSpeed
+			} else {
+				item["rxSpeed"] = float64(0)
+				item["txSpeed"] = float64(0)
+			}
 		} else {
 			item["online"] = false
 			item["rxBytes"] = 0
 			item["txBytes"] = 0
+			item["rxSpeed"] = float64(0)
+			item["txSpeed"] = float64(0)
 		}
 
 		result = append(result, item)

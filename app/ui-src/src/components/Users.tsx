@@ -73,6 +73,13 @@ const Users: React.FC<Props> = ({ onViewUser }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
+  const formatSpeed = (bps: number) => {
+    if (!bps || bps <= 0) return '0 B/s'
+    if (bps < 1024) return bps.toFixed(1) + ' B/s'
+    if (bps < 1024 * 1024) return (bps / 1024).toFixed(1) + ' KB/s'
+    return (bps / (1024 * 1024)).toFixed(2) + ' MB/s'
+  }
+
   return (
     <div className="users-page">
       <div className="page-header">
@@ -153,8 +160,8 @@ const Users: React.FC<Props> = ({ onViewUser }) => {
             <th>内部IP</th>
             <th>公钥</th>
             <th>状态</th>
-            <th>下载</th>
-            <th>上传</th>
+            <th>下载速度</th>
+            <th>上传速度</th>
             <th>创建时间</th>
             <th>操作</th>
           </tr>
@@ -170,8 +177,8 @@ const Users: React.FC<Props> = ({ onViewUser }) => {
                 <span className={`status-dot ${user.online ? 'online' : 'offline'}`} />
                 {user.online ? '在线' : '离线'}
               </td>
-              <td>{formatBytes(user.rxBytes || 0)}</td>
-              <td>{formatBytes(user.txBytes || 0)}</td>
+              <td>{formatSpeed(user.rxSpeed || 0)}</td>
+              <td>{formatSpeed(user.txSpeed || 0)}</td>
               <td>{user.createdAt}</td>
               <td className="actions">
                 <button className="btn btn-sm" onClick={() => onViewUser(user.id)}>详情</button>

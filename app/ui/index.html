@@ -32134,12 +32134,11 @@ const Users = ({ onViewUser }) => {
       console.error("Failed to get IP hint", e3);
     }
   };
-  const formatBytes2 = (bytes) => {
-    if (!bytes) return "0 B";
-    const k2 = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k2));
-    return parseFloat((bytes / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
+  const formatSpeed = (bps) => {
+    if (!bps || bps <= 0) return "0 B/s";
+    if (bps < 1024) return bps.toFixed(1) + " B/s";
+    if (bps < 1024 * 1024) return (bps / 1024).toFixed(1) + " KB/s";
+    return (bps / (1024 * 1024)).toFixed(2) + " MB/s";
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "users-page", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "page-header", children: [
@@ -32234,8 +32233,8 @@ const Users = ({ onViewUser }) => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "内部IP" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "公钥" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "状态" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "下载" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "上传" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "下载速度" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "上传速度" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "创建时间" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "操作" })
       ] }) }),
@@ -32252,8 +32251,8 @@ const Users = ({ onViewUser }) => {
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${user.online ? "online" : "offline"}` }),
             user.online ? "在线" : "离线"
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user.rxBytes || 0) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytes2(user.txBytes || 0) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatSpeed(user.rxSpeed || 0) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatSpeed(user.txSpeed || 0) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.createdAt }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "actions", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => onViewUser(user.id), children: "详情" }),
