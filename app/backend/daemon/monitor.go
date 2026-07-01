@@ -28,6 +28,8 @@ type Monitor struct {
 	lastUserRx   map[int]int64
 	lastUserTx   map[int]int64
 	lastUserTime time.Time
+	// 连接追踪：记录上次握手时间，检测上线/离线
+	lastHandshake map[int]int64
 }
 
 // NewMonitor creates a new bandwidth monitor.
@@ -40,6 +42,7 @@ func NewMonitor(interfaceName, dataDir string) *Monitor {
 		lastUserRx:    make(map[int]int64),
 		lastUserTx:    make(map[int]int64),
 		lastUserTime:  time.Now(),
+		lastHandshake: make(map[int]int64),
 	}
 }
 
@@ -104,6 +107,7 @@ func (m *Monitor) collectLoop() {
 	m.lastUserRx = make(map[int]int64)
 	m.lastUserTx = make(map[int]int64)
 	m.lastUserTime = time.Now()
+	m.lastHandshake = make(map[int]int64)
 
 	// 启动时自动同步 DB 用户到 WireGuard 内核（防止之前新增用户时守护进程不在线）
 	m.syncConfig()
@@ -179,8 +183,10 @@ func (m *Monitor) collectPerUserBandwidth() {
 	}
 
 	pubKeyToUser := make(map[string]int)
+	userByID := make(map[int]db.User)
 	for _, u := range users {
 		pubKeyToUser[u.PublicKey] = u.ID
+		userByID[u.ID] = u
 	}
 
 	now := time.Now()
@@ -194,6 +200,17 @@ func (m *Monitor) collectPerUserBandwidth() {
 		if !exists {
 			continue
 		}
+
+		// 检测上线/离线（握手时间变化）
+		prevHS := m.lastHandshake[userID]
+		if prevHS == 0 && peer.LatestHandshake > 0 {
+			if u, ok := userByID[userID]; ok {
+				db.RecordConnection(userID, u.Username, u.InternalIP, peer.Endpoint)
+			}
+		} else if prevHS > 0 && peer.LatestHandshake == 0 {
+			db.UpdateConnectionOnDisconnect(userID, peer.TransferRx, peer.TransferTx)
+		}
+		m.lastHandshake[userID] = peer.LatestHandshake
 
 		// 计算实时速度
 		rxSpeed := float64(0)

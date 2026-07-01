@@ -35,6 +35,11 @@ func NewRouter() *http.ServeMux {
 	mux.HandleFunc("/api/logs/clean", handleLogsClean)
 	mux.HandleFunc("/api/ip/hint", handleIPHint)
 
+	// DB stats
+	mux.HandleFunc("/api/db/stats", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, db.GetDBStats())
+	})
+
 	// Health check
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "version": Version})
@@ -47,7 +52,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.68"
+var Version = "1.0.69"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

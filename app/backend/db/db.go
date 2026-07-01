@@ -99,6 +99,18 @@ func createTables() error {
 			ts INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE IF NOT EXISTS connection_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER,
+			username TEXT,
+			internal_ip TEXT,
+			external_ip TEXT,
+			connected_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
+			disconnected_at INTEGER,
+			rx_bytes INTEGER DEFAULT 0,
+			tx_bytes INTEGER DEFAULT 0,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS config (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
@@ -250,21 +262,33 @@ func CleanLogsByDays(days int) error {
 
 // GetLogSize returns the database file size in bytes.
 func GetLogSize() (int64, error) {
-	var size int64
-	baseDir := filepath.Dir(dbPath)
-	entries, err := os.ReadDir(baseDir)
+	info, err := os.Stat(dbPath)
 	if err != nil {
 		return 0, err
 	}
-	for _, e := range entries {
-		if !e.IsDir() && filepath.Ext(e.Name()) != ".db-journal" {
-			info, err := e.Info()
-			if err == nil {
-				size += info.Size()
-			}
-		}
+	return info.Size(), nil
+}
+
+// GetDBStats returns DB stats: bandwidth rows, log rows, db file size.
+func GetDBStats() map[string]interface{} {
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+
+	var bwRows, logRows int64
+	db.QueryRow("SELECT COUNT(*) FROM bandwidth_history").Scan(&bwRows)
+	db.QueryRow("SELECT COUNT(*) FROM system_log").Scan(&logRows)
+
+	info, _ := os.Stat(dbPath)
+	var dbSize int64
+	if info != nil {
+		dbSize = info.Size()
 	}
-	return size, nil
+
+	return map[string]interface{}{
+		"bandwidthRows": bwRows,
+		"logRows":       logRows,
+		"dbSize":        dbSize,
+	}
 }
 
 // CleanBandwidthHistory removes bandwidth records older than days.

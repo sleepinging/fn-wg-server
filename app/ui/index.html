@@ -10281,6 +10281,7 @@ const getSystemInfo = () => api.get("/system").then((r2) => r2.data);
 const getWGKernel = () => api.get("/wg/kernel").then((r2) => r2.data);
 const getLogs = (page = 1, pageSize = 50, level = "", search = "") => api.get(`/logs?page=${page}&pageSize=${pageSize}&level=${level}&search=${encodeURIComponent(search)}`).then((r2) => r2.data);
 const cleanLogs = (days) => api.post("/logs/clean", { days }).then((r2) => r2.data);
+const getDBStats = () => api.get("/db/stats").then((r2) => r2.data);
 const getIPHint = () => api.get("/ip/hint").then((r2) => r2.data);
 const getUserConfig = (id2) => api.get(`/users/${id2}/config?format=json`).then((r2) => r2.data);
 function r(e3) {
@@ -31941,11 +31942,14 @@ var LineChart = generateCategoricalChart({
   formatAxisMap
 });
 const Dashboard = ({ onViewUser }) => {
+  var _a, _b;
   const [stats, setStats] = reactExports.useState(null);
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
+  const [dbStats, setDbStats] = reactExports.useState(null);
   const chartBuf = reactExports.useRef([]);
   const firstLoad = reactExports.useRef(true);
+  const dbLastFetch = reactExports.useRef(0);
   const loadData = reactExports.useCallback(async () => {
     try {
       const [s2, u2] = await Promise.all([
@@ -31954,6 +31958,11 @@ const Dashboard = ({ onViewUser }) => {
       ]);
       setStats(s2);
       setUsers(u2);
+      if (Date.now() - dbLastFetch.current > 3e4) {
+        dbLastFetch.current = Date.now();
+        getDBStats().then(setDbStats).catch(() => {
+        });
+      }
       if (firstLoad.current) {
         firstLoad.current = false;
         const pts = await getStatsHistory(0, getStartTime$1(timeRange), 0);
@@ -32082,6 +32091,15 @@ const Dashboard = ({ onViewUser }) => {
           users.filter((u2) => u2.online).length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 7, className: "empty", children: "暂无在线用户" }) })
         ] })
       ] })
+    ] }),
+    dbStats && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "db-stats", style: { marginTop: 16, padding: 12, background: "#f5f5f5", borderRadius: 8, fontSize: 13, color: "#666" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "数据缓存:" }),
+      " 带宽 ",
+      (_a = dbStats.bandwidthRows) == null ? void 0 : _a.toLocaleString(),
+      " 条 | 日志 ",
+      (_b = dbStats.logRows) == null ? void 0 : _b.toLocaleString(),
+      " 条 | 数据库 ",
+      formatBytes2(dbStats.dbSize || 0)
     ] })
   ] });
 };
@@ -32319,8 +32337,8 @@ const HistoryTable = ({ uid }) => {
         (history || []).map((h2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: h2.internalIP }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "ip", children: h2.externalIP }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: h2.connectedAt }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: h2.disconnectedAt || "在线中" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: h2.connectedAt ? new Date(h2.connectedAt).toLocaleString() : "-" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: h2.disconnectedAt ? new Date(h2.disconnectedAt).toLocaleString() : "在线中" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytesSimple(h2.rxBytes) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytesSimple(h2.txBytes) })
         ] }, h2.id)),

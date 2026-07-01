@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { getStats, getStatsHistory, getUsers, GlobalStats, BandwidthPoint, User } from '../api'
+import { getStats, getStatsHistory, getUsers, getDBStats, GlobalStats, BandwidthPoint, User } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Props {
@@ -10,8 +10,10 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [stats, setStats] = useState<GlobalStats | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [timeRange, setTimeRange] = useState('1h')
+  const [dbStats, setDbStats] = useState<any>(null)
   const chartBuf = useRef<any[]>([])
   const firstLoad = useRef(true)
+  const dbLastFetch = useRef(0)
 
   const loadData = useCallback(async () => {
     try {
@@ -21,6 +23,12 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
       ])
       setStats(s)
       setUsers(u)
+
+      // DB stats every 30s
+      if (Date.now() - dbLastFetch.current > 30000) {
+        dbLastFetch.current = Date.now()
+        getDBStats().then(setDbStats).catch(() => {})
+      }
 
       if (firstLoad.current) {
         firstLoad.current = false
@@ -167,6 +175,12 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
           </tbody>
         </table>
       </div>
+
+      {dbStats && (
+        <div className="db-stats" style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: 13, color: '#666' }}>
+          <strong>数据缓存:</strong> 带宽 {dbStats.bandwidthRows?.toLocaleString()} 条 | 日志 {dbStats.logRows?.toLocaleString()} 条 | 数据库 {formatBytes(dbStats.dbSize || 0)}
+        </div>
+      )}
     </div>
   )
 }

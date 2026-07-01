@@ -135,6 +135,9 @@ export const getLogs = (page = 1, pageSize = 50, level = '', search = '') =>
   api.get(`/logs?page=${page}&pageSize=${pageSize}&level=${level}&search=${encodeURIComponent(search)}`).then(r => r.data)
 export const cleanLogs = (days: number) => api.post('/logs/clean', { days }).then(r => r.data)
 
+// DB Stats
+export const getDBStats = () => api.get('/db/stats').then(r => r.data)
+
 // IP Hint
 export const getIPHint = () => api.get('/ip/hint').then(r => r.data)
 export const getUserConfig = (id: number) => api.get(`/users/${id}/config?format=json`).then(r => r.data)

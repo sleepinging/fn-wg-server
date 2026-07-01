@@ -19,7 +19,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.68"
+const Version = "1.0.69"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
