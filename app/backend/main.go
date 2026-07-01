@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,7 +20,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.74"
+const Version = "1.0.75"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -201,6 +202,14 @@ func writeCGIError(status int, msg string) {
 }
 
 func runDaemon(dataDir string) {
+	// 文件锁互斥，防止同时运行多个守护进程
+	lockFile, err := tryLock(dataDir)
+	if err != nil {
+		log.Printf("Cannot start daemon: %v", err)
+		os.Exit(1)
+	}
+	defer lockFile.Close()
+
 	interfaceName := loadInterfaceName()
 
 	// 启动内部 API 服务（Unix socket），处理所有 DB 操作
@@ -239,6 +248,11 @@ func handleCommand(cmd string) {
 // startDaemon 启动守护进程（从 CGI 调用时自动启动）
 // 使用 Setpgid 脱离 CGI 进程组，防止 CGI 退出时守护进程被杀死
 func startDaemon(dataDir string) {
+	// 先检查守护进程是否已在运行
+	if _, err := net.DialTimeout("unix", filepath.Join(dataDir, "daemon.sock"), 100*time.Millisecond); err == nil {
+		return // 已在运行
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		log.Printf("startDaemon: cannot get executable: %v", err)
@@ -289,6 +303,25 @@ func isWGRunning() bool {
 		return false
 	}
 	return strings.TrimSpace(string(data)) == "1"
+}
+
+// tryLock 获取文件锁，防止多个守护进程同时运行。
+// Linux 上使用 flock，Windows 上降级为空操作。
+func tryLock(dataDir string) (*os.File, error) {
+	lockPath := filepath.Join(dataDir, "daemon.lock")
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, err
+	}
+	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("daemon already running (pid in %s)", lockPath)
+	}
+	// 写入 PID
+	f.Truncate(0)
+	f.WriteString(fmt.Sprintf("%d", os.Getpid()))
+	return f, nil
 }
 
 func loadInterfaceName() string {
