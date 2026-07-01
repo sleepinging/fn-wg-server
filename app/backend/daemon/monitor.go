@@ -31,6 +31,8 @@ type Monitor struct {
 
 // NewMonitor creates a new bandwidth monitor.
 func NewMonitor(interfaceName, dataDir string) *Monitor {
+	// 设置对等端缓存目录，供 CGI 读取
+	wg.SetPeersCacheDir(dataDir)
 	return &Monitor{
 		interfaceName:     interfaceName,
 		dataDir:           dataDir,
@@ -173,9 +175,16 @@ func WriteConfigTrigger(dataDir, action string) error {
 }
 
 func (m *Monitor) collectPerUserBandwidth() {
-	peers, err := wg.GetPeers(m.interfaceName)
+	// 守护进程以 root 权限运行，可以直接使用 wgctrl 读取对等端信息
+	peers, err := wg.GetPeersFromWgctl(m.interfaceName)
 	if err != nil {
+		log.Printf("GetPeersFromWgctl error: %v", err)
 		return
+	}
+
+	// 保存到缓存文件供 CGI 读取
+	if err := wg.SavePeersToCache(peers); err != nil {
+		log.Printf("SavePeersToCache error: %v", err)
 	}
 
 	users, err := db.ListUsers()
@@ -183,7 +192,6 @@ func (m *Monitor) collectPerUserBandwidth() {
 		return
 	}
 
-	// Build a map of public key -> user ID
 	pubKeyToUser := make(map[string]int)
 	for _, u := range users {
 		pubKeyToUser[u.PublicKey] = u.ID
@@ -195,13 +203,8 @@ func (m *Monitor) collectPerUserBandwidth() {
 			continue
 		}
 
-		// Save per-user bandwidth point
 		if err := db.SaveBandwidthPoint(userID, peer.TransferRx, peer.TransferTx, 0, 0); err != nil {
 			log.Printf("Failed to save user bandwidth (user %d): %v", userID, err)
 		}
-
-		// Check if user just connected (recent handshake)
-		// We handle connection tracking separately via API
-		_ = peer.LatestHandshake
 	}
 }

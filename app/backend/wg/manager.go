@@ -3,10 +3,12 @@ package wg
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -290,20 +292,22 @@ func RemovePeer(interfaceName, publicKey string) error {
 }
 
 // GetPeers 获取当前 WireGuard 接口的所有对等端信息
+// CGI 进程无权限，从守护进程写入的缓存文件读取
 func GetPeers(interfaceName string) ([]PeerInfo, error) {
-	// CGI 进程通常没有 CAP_NET_ADMIN，无法使用 wgctrl 库
-	// 此时静默返回空列表，不影响其他功能
+	return GetPeersFromCache(interfaceName)
+}
+
+// GetPeersFromWgctl 通过 wgctrl 库直接读取（需要 root/CAP_NET_ADMIN）
+func GetPeersFromWgctl(interfaceName string) ([]PeerInfo, error) {
 	client, err := newClient()
 	if err != nil {
-		// wgctrl 不可用（无权限），返回空列表
-		return []PeerInfo{}, nil
+		return nil, fmt.Errorf("wgctrl new: %w", err)
 	}
 	defer client.Close()
 
 	device, err := client.Device(interfaceName)
 	if err != nil {
-		// 接口不存在或无权访问，返回空列表
-		return []PeerInfo{}, nil
+		return nil, fmt.Errorf("get device: %w", err)
 	}
 
 	var peers []PeerInfo
@@ -321,6 +325,43 @@ func GetPeers(interfaceName string) ([]PeerInfo, error) {
 			TransferTx:      p.TransmitBytes,
 			PersistentKeepalive: int(p.PersistentKeepaliveInterval.Seconds()),
 		})
+	}
+	return peers, nil
+}
+
+// SetPeersCacheDir 设置对等端缓存目录（由 daemon 在启动时调用）
+var peersCacheDir string
+
+func SetPeersCacheDir(dir string) {
+	peersCacheDir = dir
+}
+
+// SavePeersToCache 将对等端信息写入缓存文件（由守护进程调用）
+func SavePeersToCache(peers []PeerInfo) error {
+	if peersCacheDir == "" {
+		return fmt.Errorf("peers cache dir not set")
+	}
+	data, err := json.Marshal(peers)
+	if err != nil {
+		return err
+	}
+	cacheFile := filepath.Join(peersCacheDir, "peers.cache")
+	return os.WriteFile(cacheFile, data, 0644)
+}
+
+// GetPeersFromCache 从缓存文件读取对等端信息（由 CGI 调用）
+func GetPeersFromCache(interfaceName string) ([]PeerInfo, error) {
+	if peersCacheDir == "" {
+		return []PeerInfo{}, nil
+	}
+	cacheFile := filepath.Join(peersCacheDir, "peers.cache")
+	data, err := os.ReadFile(cacheFile)
+	if err != nil {
+		return []PeerInfo{}, nil
+	}
+	var peers []PeerInfo
+	if err := json.Unmarshal(data, &peers); err != nil {
+		return []PeerInfo{}, nil
 	}
 	return peers, nil
 }
