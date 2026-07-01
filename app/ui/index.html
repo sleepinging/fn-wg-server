@@ -32425,13 +32425,7 @@ const UserDetail = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k2));
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
-  const chartData = ((traffic == null ? void 0 : traffic.chart) || []).map((p2) => ({
-    time: new Date(p2.timestamp).toLocaleTimeString(),
-    rxSpeed: p2.rxSpeed || 0,
-    txSpeed: p2.txSpeed || 0,
-    rxBytes: p2.rxBytes || 0,
-    txBytes: p2.txBytes || 0
-  }));
+  const chartData = chartPoints.current.slice();
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId);
@@ -33126,16 +33120,9 @@ const App = () => {
   const [systemInfo, setSystemInfo] = reactExports.useState(null);
   const [wgKernel, setWgKernel] = reactExports.useState(null);
   const [sysRefreshInterval, setSysRefreshInterval] = reactExports.useState(3e4);
-  const timerRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     loadSystemInfo();
-    if (sysRefreshInterval > 0) {
-      timerRef.current = window.setInterval(loadSystemInfo, sysRefreshInterval);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [sysRefreshInterval]);
+  }, []);
   const loadSystemInfo = async () => {
     try {
       const [info, kernel] = await Promise.all([
@@ -33208,21 +33195,7 @@ const App = () => {
       },
       tab.key
     )) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "tab-content", children: renderContent2() }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "app-footer", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-        "wg-server v",
-        (systemInfo == null ? void 0 : systemInfo.version) || "1.0.0"
-      ] }),
-      systemInfo && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-        "CPU: ",
-        systemInfo.cpuUsage || "N/A",
-        " | 内存: ",
-        systemInfo.processMemory || "N/A",
-        " | 运行: ",
-        systemInfo.uptime || "N/A"
-      ] })
-    ] })
+    /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "tab-content", children: renderContent2() })
   ] });
 };
 client.createRoot(document.getElementById("root")).render(
@@ -34000,17 +33973,6 @@ code.blur:hover {
 .info-row span {
   font-size: 13px;
   font-weight: 500;
-}
-
-/* ==================== Footer ==================== */
-.app-footer {
-  margin-top: 32px;
-  padding: 12px 0;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-secondary);
 }
 
 /* ==================== Loading ==================== */

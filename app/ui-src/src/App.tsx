@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { getSystemInfo, getWGKernel } from './api'
 import Dashboard from './components/Dashboard'
 import Users from './components/Users'
@@ -14,19 +14,12 @@ const App: React.FC = () => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [systemInfo, setSystemInfo] = useState<any>(null)
   const [wgKernel, setWgKernel] = useState<any>(null)
-  const [sysRefreshInterval, setSysRefreshInterval] = useState(30000) // 默认 30 秒
-  const timerRef = useRef<number | null>(null)
+  const [sysRefreshInterval, setSysRefreshInterval] = useState(30000)
 
-  // 系统信息定时刷新（间隔可配置）
+  // 仅在 App 挂载时加载一次系统信息（供 header 展示）
   useEffect(() => {
     loadSystemInfo()
-    if (sysRefreshInterval > 0) {
-      timerRef.current = window.setInterval(loadSystemInfo, sysRefreshInterval)
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [sysRefreshInterval])
+  }, [])
 
   const loadSystemInfo = async () => {
     try {
@@ -121,15 +114,6 @@ const App: React.FC = () => {
       <main className="tab-content">
         {renderContent()}
       </main>
-
-      <footer className="app-footer">
-        <span>wg-server v{systemInfo?.version || '1.0.0'}</span>
-        {systemInfo && (
-          <span>
-            CPU: {systemInfo.cpuUsage || 'N/A'} | 内存: {systemInfo.processMemory || 'N/A'} | 运行: {systemInfo.uptime || 'N/A'}
-          </span>
-        )}
-      </footer>
     </div>
   )
 }

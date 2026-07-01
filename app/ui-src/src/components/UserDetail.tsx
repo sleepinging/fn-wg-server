@@ -99,13 +99,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  const chartData = (traffic?.chart || []).map((p: any) => ({
-    time: new Date(p.timestamp).toLocaleTimeString(),
-    rxSpeed: p.rxSpeed || 0,
-    txSpeed: p.txSpeed || 0,
-    rxBytes: p.rxBytes || 0,
-    txBytes: p.txBytes || 0,
-  }))
+  // chartData 从滚动缓冲区读取，增量追加后自动左移
+  const chartData = chartPoints.current.slice()
 
   const handleExportConfig = async () => {
     try {
