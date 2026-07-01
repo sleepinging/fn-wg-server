@@ -153,6 +153,14 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
           <div className="stat-label">上传速度</div>
           <div className="stat-value">{stats ? formatSpeed(stats.txSpeed) : '-'}</div>
         </div>
+        <div className="stat-card">
+          <div className="stat-label">本次下载</div>
+          <div className="stat-value">{stats ? formatBytes(stats.sessionRxBytes || 0) : '-'}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">本次上传</div>
+          <div className="stat-value">{stats ? formatBytes(stats.sessionTxBytes || 0) : '-'}</div>
+        </div>
       </div>
 
       <div className="info-grid">

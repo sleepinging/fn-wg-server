@@ -30,6 +30,7 @@ type Monitor struct {
 	lastUserTime time.Time
 	// 连接追踪：记录上次握手时间，检测上线/离线
 	lastHandshake map[int]int64
+	collectCount int64
 }
 
 // NewMonitor creates a new bandwidth monitor.
@@ -108,6 +109,7 @@ func (m *Monitor) collectLoop() {
 	m.lastUserTx = make(map[int]int64)
 	m.lastUserTime = time.Now()
 	m.lastHandshake = make(map[int]int64)
+	m.collectCount = 0
 
 	// 启动时自动同步 DB 用户到 WireGuard 内核（防止之前新增用户时守护进程不在线）
 	m.syncConfig()
@@ -142,6 +144,7 @@ func (m *Monitor) syncConfig() {
 }
 
 func (m *Monitor) collect() {
+	m.collectCount++
 	// Collect global bandwidth
 	currentRx, currentTx, err := wg.GetInterfaceTransfer(m.interfaceName)
 	if err != nil {
@@ -204,13 +207,22 @@ func (m *Monitor) collectPerUserBandwidth() {
 		// 检测上线/离线（握手时间变化）
 		prevHS := m.lastHandshake[userID]
 		if prevHS == 0 && peer.LatestHandshake > 0 {
-			if u, ok := userByID[userID]; ok {
-				db.RecordConnection(userID, u.Username, u.InternalIP, peer.Endpoint)
+			// 上线：仅当没有活跃连接时才记录（去重）
+			if !db.HasActiveConnection(userID) {
+				if u, ok := userByID[userID]; ok {
+					db.RecordConnection(userID, u.Username, u.InternalIP, peer.Endpoint)
+				}
 			}
 		} else if prevHS > 0 && peer.LatestHandshake == 0 {
+			// 离线
 			db.UpdateConnectionOnDisconnect(userID, peer.TransferRx, peer.TransferTx)
 		}
 		m.lastHandshake[userID] = peer.LatestHandshake
+
+		// 每 30s 更新活跃连接的流量（不是只在离线时写）
+		if peer.LatestHandshake > 0 && m.collectCount%30 == 0 {
+			db.UpdateActiveConnectionTraffic(userID, peer.TransferRx, peer.TransferTx)
+		}
 
 		// 计算实时速度
 		rxSpeed := float64(0)

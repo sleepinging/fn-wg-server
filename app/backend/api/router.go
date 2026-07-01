@@ -52,7 +52,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.71"
+var Version = "1.0.72"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -518,6 +518,9 @@ func handleUserStats(w http.ResponseWriter, r *http.Request, userID int) {
 				stats["rxSpeed"] = point.RxSpeed
 				stats["txSpeed"] = point.TxSpeed
 			}
+
+			// 本次会话流量（从活跃连接记录获取）
+			stats["sessionRxBytes"], stats["sessionTxBytes"] = db.GetActiveSessionTraffic(userID, p.TransferRx, p.TransferTx)
 			break
 		}
 	}

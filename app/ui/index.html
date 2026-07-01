@@ -32494,6 +32494,14 @@ const UserDetail = ({ userId, onBack }) => {
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "上传速度" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatSpeed(stats.txSpeed) : "-" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "本次下载" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatBytes2(stats.sessionRxBytes || 0) : "-" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "本次上传" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatBytes2(stats.sessionTxBytes || 0) : "-" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-grid", children: [

@@ -255,3 +255,37 @@ func UpdateConnectionOnDisconnect(userID int, rx, tx int64) error {
 		time.Now().UnixMilli(), rx, tx, userID)
 	return err
 }
+
+// HasActiveConnection checks if user has an undisconnected connection.
+func HasActiveConnection(userID int) bool {
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM connection_log WHERE user_id = ? AND disconnected_at IS NULL", userID).Scan(&count)
+	return count > 0
+}
+
+// UpdateActiveConnectionTraffic updates rx/tx for active connections (periodic, not only on disconnect).
+func UpdateActiveConnectionTraffic(userID int, rx, tx int64) {
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+
+	db.Exec(`UPDATE connection_log SET rx_bytes = ?, tx_bytes = ?
+		WHERE user_id = ? AND disconnected_at IS NULL`, rx, tx, userID)
+}
+
+// GetActiveSessionTraffic returns the session rx/tx for display.
+// Falls back to peer transfer values if no active connection record.
+func GetActiveSessionTraffic(userID int, peerRx, peerTx int64) (int64, int64) {
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+
+	var rx, tx int64
+	err := db.QueryRow(`SELECT rx_bytes, tx_bytes FROM connection_log
+		WHERE user_id = ? AND disconnected_at IS NULL ORDER BY id DESC LIMIT 1`, userID).Scan(&rx, &tx)
+	if err != nil {
+		return peerRx, peerTx
+	}
+	return rx, tx
+}
