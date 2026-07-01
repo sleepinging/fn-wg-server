@@ -69,9 +69,18 @@ func (m *Monitor) Start() {
 func (m *Monitor) Stop() {
 	if m.running {
 		close(m.stopCh)
-		m.wg.Wait()
+		// 等待采集 goroutine 退出，带超时
+		done := make(chan struct{}, 1)
+		go func() {
+			m.wg.Wait()
+			done <- struct{}{}
+		}()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			log.Println("Monitor goroutine stop timed out")
+		}
 		m.running = false
-		// 最后一次刷入缓冲区数据
 		db.StopBandwidthBuffer()
 		os.Remove(m.pidFile)
 		log.Println("Bandwidth monitor stopped")

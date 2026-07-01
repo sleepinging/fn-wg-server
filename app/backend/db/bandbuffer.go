@@ -49,11 +49,24 @@ func InitBandwidthBuffer(intervalSec int) {
 // StopBandwidthBuffer 停止缓存写入器
 func StopBandwidthBuffer() {
 	bufMu.Lock()
-	defer bufMu.Unlock()
-	if bufRunning {
-		close(bufStopCh)
-		bufRunning = false
-		flushNow() // 最后一次刷入
+	if !bufRunning {
+		bufMu.Unlock()
+		return
+	}
+	close(bufStopCh)
+	bufRunning = false
+	bufMu.Unlock()
+
+	// 最后一次刷入，带超时防止卡死
+	done := make(chan struct{}, 1)
+	go func() {
+		flushNow()
+		done <- struct{}{}
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		log.Println("Bandwidth buffer flush timed out, discarding")
 	}
 }
 
