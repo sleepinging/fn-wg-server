@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -46,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.33"
+var Version = "1.0.34"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -1167,6 +1168,9 @@ func handleUserConfig(w http.ResponseWriter, r *http.Request, userID int) {
 		clientIP = user.InternalIP
 	}
 
+	// 计算 AllowedIPs：默认为配置的 VPN 网段（例如 192.168.5.0/24），而非全路由
+	allowedIPs := computeAllowedIPs(cfg.Address)
+
 	// 构建配置文件文本
 	config := fmt.Sprintf(`[Interface]
 PrivateKey = %s
@@ -1177,7 +1181,7 @@ MTU = %d
 [Peer]
 PublicKey = %s
 Endpoint = %s
-AllowedIPs = 0.0.0.0/0, ::/0
+AllowedIPs = %s
 PersistentKeepalive = %d
 `,
 		user.PrivateKey,
@@ -1186,6 +1190,7 @@ PersistentKeepalive = %d
 		user.MTU,
 		cfg.PublicKey,
 		serverEndpoint,
+		allowedIPs,
 		user.PersistentKeepalive,
 	)
 
@@ -1213,6 +1218,30 @@ PersistentKeepalive = %d
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(config))
+}
+
+// computeAllowedIPs 从服务端地址计算客户端 AllowedIPs
+// 例如 "192.168.5.1/24" → "192.168.5.0/24"
+func computeAllowedIPs(addr string) string {
+	if addr == "" {
+		return "192.168.5.0/24"
+	}
+	// 移除单个 IP/32 的情况
+	addr = strings.TrimSuffix(addr, "/32")
+	_, ipNet, err := net.ParseCIDR(addr)
+	if err != nil {
+		// 尝试只取 IP，自动推断 /24
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			return "192.168.5.0/24"
+		}
+		ip = ip.To4()
+		if ip == nil {
+			return addr + "/24"
+		}
+		return fmt.Sprintf("%d.%d.%d.0/24", ip[0], ip[1], ip[2])
+	}
+	return ipNet.String()
 }
 
 
