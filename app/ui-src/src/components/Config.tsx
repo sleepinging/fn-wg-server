@@ -96,6 +96,21 @@ const Config: React.FC = () => {
     }
   }
 
+  const handleExportAll = async () => {
+    try {
+      const res = await api.get('/config/export-all')
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `wg-server-full-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('导出失败')
+    }
+  }
+
   return (
     <div className="config-page">
       <div className="config-section">
@@ -201,21 +216,6 @@ const Config: React.FC = () => {
       </div>
     </div>
   )
-
-  const handleExportAll = async () => {
-    try {
-      const res = await api.get('/config/export-all')
-      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `wg-server-full-export-${new Date().toISOString().slice(0, 10)}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      alert('导出失败')
-    }
-  }
 }
 
 export default Config

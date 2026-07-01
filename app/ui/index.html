@@ -32657,6 +32657,20 @@ const Config = () => {
       alert("操作失败: " + (((_b = (_a = e3.response) == null ? void 0 : _a.data) == null ? void 0 : _b.error) || e3.message));
     }
   };
+  const handleExportAll = async () => {
+    try {
+      const res = await api.get("/config/export-all");
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a2 = document.createElement("a");
+      a2.href = url;
+      a2.download = `wg-server-full-export-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`;
+      a2.click();
+      URL.revokeObjectURL(url);
+    } catch (e3) {
+      alert("导出失败");
+    }
+  };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-page", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-section", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: "服务控制" }),
@@ -32758,20 +32772,6 @@ const Config = () => {
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-success", onClick: handleExportAll, children: "导出全部" })
     ] })
   ] });
-  const handleExportAll = async () => {
-    try {
-      const res = await api.get("/config/export-all");
-      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a2 = document.createElement("a");
-      a2.href = url;
-      a2.download = `wg-server-full-export-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`;
-      a2.click();
-      URL.revokeObjectURL(url);
-    } catch (e3) {
-      alert("导出失败");
-    }
-  };
 };
 const LOG_LEVELS = ["", "INFO", "WARN", "ERROR"];
 const Logs = () => {
