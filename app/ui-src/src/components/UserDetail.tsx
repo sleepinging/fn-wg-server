@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getUser, getUserStats, getUserTraffic, getUserConfig, User } from '../api'
 import HistoryTable from './HistoryTable'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -15,18 +15,10 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = useState('1h')
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
-  const [chartData, setChartData] = useState<any[]>([])
-  const isFirstLoad = useRef(true)
+  const chartBuf = useRef<any[]>([])
+  const firstLoad = useRef(true)
 
-  useEffect(() => {
-    isFirstLoad.current = true
-    setChartData([])
-    loadData()
-    const timer = setInterval(loadData, 1000)
-    return () => clearInterval(timer)
-  }, [userId, timeRange])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [u, s] = await Promise.all([
         getUser(userId),
@@ -35,44 +27,29 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
       setUser(u)
       setStats(s)
 
-      if (isFirstLoad.current) {
-        isFirstLoad.current = false
+      if (firstLoad.current) {
+        firstLoad.current = false
         const t = await getUserTraffic(userId, getStartTime(timeRange), 0)
         setTraffic(t)
         if (t?.chart?.length > 0) {
-          setChartData(t.chart.map((p: any) => ({
-            time: new Date(p.ts).toLocaleTimeString(),
-            rxSpeed: p.rxSpeed || 0,
-            txSpeed: p.txSpeed || 0,
-            rxBytes: p.rxBytes || 0,
-            txBytes: p.txBytes || 0,
-          })))
+          chartBuf.current = t.chart.map((p: any) => ({ ...p }))
         }
       } else {
-        const buf = chartData
-        const latest = buf.length > 0 ? buf[buf.length - 1].ts || buf[buf.length - 1]._ts : 0
+        const latest = chartBuf.current.length > 0
+          ? chartBuf.current[chartBuf.current.length - 1].ts
+          : 0
         if (latest > 0) {
           const t = await getUserTraffic(userId, latest, 0)
           if (t?.chart?.length > 0) {
-            const seen = new Set(buf.map((p: any) => p._ts || p.ts))
-            let changed = false
+            const seen = new Set(chartBuf.current.map((p: any) => p.ts))
             for (const p of t.chart) {
               if (!seen.has(p.ts)) {
+                chartBuf.current.push(p)
                 seen.add(p.ts)
-                buf.push({
-                  time: new Date(p.ts).toLocaleTimeString(),
-                  rxSpeed: p.rxSpeed || 0,
-                  txSpeed: p.txSpeed || 0,
-                  rxBytes: p.rxBytes || 0,
-                  txBytes: p.txBytes || 0,
-                  _ts: p.ts,
-                })
-                changed = true
               }
             }
-            if (changed) {
-              if (buf.length > 200) setChartData(buf.slice(buf.length - 200))
-              else setChartData([...buf])
+            if (chartBuf.current.length > 200) {
+              chartBuf.current = chartBuf.current.slice(-200)
             }
           }
         }
@@ -80,7 +57,15 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     } catch (e) {
       console.error('Failed to load user detail', e)
     }
-  }
+  }, [userId, timeRange])
+
+  useEffect(() => {
+    firstLoad.current = true
+    chartBuf.current = []
+    loadData()
+    const timer = setInterval(loadData, 1000)
+    return () => clearInterval(timer)
+  }, [loadData])
 
   const formatBytes = (bytes: number) => {
     if (!bytes) return '0 B'
@@ -97,6 +82,14 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k))
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
+
+  const chartData = chartBuf.current.map((p: any) => ({
+    time: new Date(p.ts).toLocaleTimeString(),
+    rxSpeed: p.rxSpeed || 0,
+    txSpeed: p.txSpeed || 0,
+    rxBytes: p.rxBytes || 0,
+    txBytes: p.txBytes || 0,
+  }))
 
   const handleExportConfig = async () => {
     try {

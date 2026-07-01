@@ -32372,16 +32372,9 @@ const UserDetail = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = reactExports.useState("1h");
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
-  const [chartData, setChartData] = reactExports.useState([]);
-  const isFirstLoad = reactExports.useRef(true);
-  reactExports.useEffect(() => {
-    isFirstLoad.current = true;
-    setChartData([]);
-    loadData();
-    const timer = setInterval(loadData, 1e3);
-    return () => clearInterval(timer);
-  }, [userId, timeRange]);
-  const loadData = async () => {
+  const chartBuf = reactExports.useRef([]);
+  const firstLoad = reactExports.useRef(true);
+  const loadData = reactExports.useCallback(async () => {
     var _a, _b;
     try {
       const [u2, s2] = await Promise.all([
@@ -32390,44 +32383,27 @@ const UserDetail = ({ userId, onBack }) => {
       ]);
       setUser(u2);
       setStats(s2);
-      if (isFirstLoad.current) {
-        isFirstLoad.current = false;
+      if (firstLoad.current) {
+        firstLoad.current = false;
         const t2 = await getUserTraffic(userId, getStartTime(timeRange), 0);
         setTraffic(t2);
         if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
-          setChartData(t2.chart.map((p2) => ({
-            time: new Date(p2.ts).toLocaleTimeString(),
-            rxSpeed: p2.rxSpeed || 0,
-            txSpeed: p2.txSpeed || 0,
-            rxBytes: p2.rxBytes || 0,
-            txBytes: p2.txBytes || 0
-          })));
+          chartBuf.current = t2.chart.map((p2) => ({ ...p2 }));
         }
       } else {
-        const buf = chartData;
-        const latest = buf.length > 0 ? buf[buf.length - 1].ts || buf[buf.length - 1]._ts : 0;
+        const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
         if (latest > 0) {
           const t2 = await getUserTraffic(userId, latest, 0);
           if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
-            const seen = new Set(buf.map((p2) => p2._ts || p2.ts));
-            let changed = false;
+            const seen = new Set(chartBuf.current.map((p2) => p2.ts));
             for (const p2 of t2.chart) {
               if (!seen.has(p2.ts)) {
+                chartBuf.current.push(p2);
                 seen.add(p2.ts);
-                buf.push({
-                  time: new Date(p2.ts).toLocaleTimeString(),
-                  rxSpeed: p2.rxSpeed || 0,
-                  txSpeed: p2.txSpeed || 0,
-                  rxBytes: p2.rxBytes || 0,
-                  txBytes: p2.txBytes || 0,
-                  _ts: p2.ts
-                });
-                changed = true;
               }
             }
-            if (changed) {
-              if (buf.length > 200) setChartData(buf.slice(buf.length - 200));
-              else setChartData([...buf]);
+            if (chartBuf.current.length > 200) {
+              chartBuf.current = chartBuf.current.slice(-200);
             }
           }
         }
@@ -32435,7 +32411,14 @@ const UserDetail = ({ userId, onBack }) => {
     } catch (e3) {
       console.error("Failed to load user detail", e3);
     }
-  };
+  }, [userId, timeRange]);
+  reactExports.useEffect(() => {
+    firstLoad.current = true;
+    chartBuf.current = [];
+    loadData();
+    const timer = setInterval(loadData, 1e3);
+    return () => clearInterval(timer);
+  }, [loadData]);
   const formatBytes2 = (bytes) => {
     if (!bytes) return "0 B";
     const k2 = 1024;
@@ -32450,6 +32433,13 @@ const UserDetail = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k2));
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
+  const chartData = chartBuf.current.map((p2) => ({
+    time: new Date(p2.ts).toLocaleTimeString(),
+    rxSpeed: p2.rxSpeed || 0,
+    txSpeed: p2.txSpeed || 0,
+    rxBytes: p2.rxBytes || 0,
+    txBytes: p2.txBytes || 0
+  }));
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId);
