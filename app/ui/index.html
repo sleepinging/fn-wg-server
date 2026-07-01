@@ -32372,6 +32372,7 @@ const UserDetail = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = reactExports.useState("1h");
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
+  const [chartVer, setChartVer] = reactExports.useState(0);
   const chartPoints = reactExports.useRef([]);
   const isFirstLoad = reactExports.useRef(true);
   reactExports.useEffect(() => {
@@ -32396,6 +32397,7 @@ const UserDetail = ({ userId, onBack }) => {
         setTraffic(t2);
         if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
           chartPoints.current = t2.chart.map((p2) => ({ ...p2 }));
+          setChartVer((v2) => v2 + 1);
         }
       } else {
         const latest = chartPoints.current.length > 0 ? chartPoints.current[chartPoints.current.length - 1].ts : 0;
@@ -32412,6 +32414,7 @@ const UserDetail = ({ userId, onBack }) => {
             if (chartPoints.current.length > 200) {
               chartPoints.current.splice(0, chartPoints.current.length - 200);
             }
+            setChartVer((v2) => v2 + 1);
           }
         }
       }

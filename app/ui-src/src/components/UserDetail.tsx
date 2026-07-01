@@ -15,6 +15,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = useState('1h')
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
+  const [chartVer, setChartVer] = useState(0)
   const chartPoints = useRef<any[]>([])
   const isFirstLoad = useRef(true)
 
@@ -42,6 +43,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         setTraffic(t)
         if (t?.chart?.length > 0) {
           chartPoints.current = t.chart.map((p: any) => ({ ...p }))
+          setChartVer(v => v + 1)
         }
       } else {
         // 增量：传 since=最新毫秒时间戳
@@ -61,6 +63,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
             if (chartPoints.current.length > 200) {
               chartPoints.current.splice(0, chartPoints.current.length - 200)
             }
+            setChartVer(v => v + 1)
           }
         }
       }
@@ -86,6 +89,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   }
 
   // chartData 从滚动缓冲区读取，映射 ts→time 给 XAxis 用
+  // chartVer 强制在 ref 修改后重渲染
+  const _cv = chartVer
   const chartData = chartPoints.current.map((p: any) => ({
     time: new Date(p.ts).toLocaleTimeString(),
     rxSpeed: p.rxSpeed || 0,
