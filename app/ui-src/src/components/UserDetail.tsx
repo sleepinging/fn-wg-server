@@ -169,14 +169,14 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
           </select>
         </div>
         <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={chartData}>
+          <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="time" fontSize={12} />
             <YAxis fontSize={12} tickFormatter={v => formatSpeed(v)} />
             <Tooltip formatter={(value: number) => [formatSpeed(value), '']} />
-            <Area type="monotone" dataKey="rxSpeed" stroke="#2196F3" fill="#2196F3" fillOpacity={0.1} name="下载" />
-            <Area type="monotone" dataKey="txSpeed" stroke="#FF9800" fill="#FF9800" fillOpacity={0.1} name="上传" />
-          </AreaChart>
+            <Line type="monotone" dataKey="rxSpeed" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} />
+            <Line type="monotone" dataKey="txSpeed" stroke="#FF9800" strokeWidth={2} name="上传" dot={false} />
+          </LineChart>
         </ResponsiveContainer>
       </div>
 

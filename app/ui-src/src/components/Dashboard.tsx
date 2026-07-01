@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getStats, getStatsHistory, getUsers, GlobalStats, BandwidthPoint, User } from '../api'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Props {
   onViewUser: (userId: number) => void
@@ -29,7 +29,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
 
   useEffect(() => {
     loadData()
-    const timer = setInterval(loadData, 5000)
+    const timer = setInterval(loadData, 1000)
     return () => clearInterval(timer)
   }, [loadData])
 
@@ -92,14 +92,14 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
           </select>
         </div>
         <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={chartData}>
+          <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="time" fontSize={12} />
             <YAxis fontSize={12} tickFormatter={v => formatSpeed(v)} />
             <Tooltip formatter={(value: number) => [formatSpeed(value), '']} />
-            <Area type="monotone" dataKey="rx" stroke="#2196F3" fill="#2196F3" fillOpacity={0.1} name="下载" />
-            <Area type="monotone" dataKey="tx" stroke="#FF9800" fill="#FF9800" fillOpacity={0.1} name="上传" />
-          </AreaChart>
+            <Line type="monotone" dataKey="rx" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} />
+            <Line type="monotone" dataKey="tx" stroke="#FF9800" strokeWidth={2} name="上传" dot={false} />
+          </LineChart>
         </ResponsiveContainer>
       </div>
 
