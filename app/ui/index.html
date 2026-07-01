@@ -31942,7 +31942,6 @@ var LineChart = generateCategoricalChart({
 });
 const Dashboard = ({ onViewUser }) => {
   const [stats, setStats] = reactExports.useState(null);
-  const [history, setHistory] = reactExports.useState([]);
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
   const chartBuf = reactExports.useRef([]);
@@ -31955,14 +31954,29 @@ const Dashboard = ({ onViewUser }) => {
       ]);
       setStats(s2);
       setUsers(u2);
-      const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].timestamp : "";
-      const pts = await getStatsHistory(0, latest || getStartTime$1(timeRange), "");
-      if ((pts == null ? void 0 : pts.length) > 0) {
-        chartBuf.current = pts.map((p2) => ({ ...p2 }));
-        if (chartBuf.current.length > 200) {
-          chartBuf.current.splice(0, chartBuf.current.length - 200);
+      if (firstLoad.current) {
+        firstLoad.current = false;
+        const pts = await getStatsHistory(0, getStartTime$1(timeRange), "");
+        if ((pts == null ? void 0 : pts.length) > 0) {
+          chartBuf.current = pts.map((p2) => ({ ...p2 }));
         }
-        setHistory(pts);
+      } else {
+        const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].timestamp : "";
+        if (latest) {
+          const pts = await getStatsHistory(0, latest, "");
+          if ((pts == null ? void 0 : pts.length) > 0) {
+            const seen = new Set(chartBuf.current.map((p2) => p2.timestamp));
+            for (const p2 of pts) {
+              if (!seen.has(p2.timestamp)) {
+                chartBuf.current.push(p2);
+                seen.add(p2.timestamp);
+              }
+            }
+            if (chartBuf.current.length > 200) {
+              chartBuf.current.splice(0, chartBuf.current.length - 200);
+            }
+          }
+        }
       }
     } catch (e3) {
       console.error("Failed to load dashboard data", e3);
@@ -32350,7 +32364,7 @@ const UserDetail = ({ userId, onBack }) => {
     return () => clearInterval(timer);
   }, [userId, timeRange]);
   const loadData = async () => {
-    var _a;
+    var _a, _b;
     try {
       const [u2, s2] = await Promise.all([
         getUser(userId),
@@ -32358,13 +32372,29 @@ const UserDetail = ({ userId, onBack }) => {
       ]);
       setUser(u2);
       setStats(s2);
-      const latest = chartPoints.current.length > 0 ? chartPoints.current[chartPoints.current.length - 1].timestamp : getStartTime(timeRange);
-      const t2 = await getUserTraffic(userId, latest, "");
-      setTraffic(t2);
-      if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
-        chartPoints.current = t2.chart.map((p2) => ({ ...p2 }));
-        if (chartPoints.current.length > 200) {
-          chartPoints.current.splice(0, chartPoints.current.length - 200);
+      if (isFirstLoad.current) {
+        isFirstLoad.current = false;
+        const t2 = await getUserTraffic(userId, getStartTime(timeRange), "");
+        setTraffic(t2);
+        if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
+          chartPoints.current = t2.chart.map((p2) => ({ ...p2 }));
+        }
+      } else {
+        const latest = chartPoints.current.length > 0 ? chartPoints.current[chartPoints.current.length - 1].timestamp : "";
+        if (latest) {
+          const t2 = await getUserTraffic(userId, latest, "");
+          if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
+            const seen = new Set(chartPoints.current.map((p2) => p2.timestamp));
+            for (const p2 of t2.chart) {
+              if (!seen.has(p2.timestamp)) {
+                chartPoints.current.push(p2);
+                seen.add(p2.timestamp);
+              }
+            }
+            if (chartPoints.current.length > 200) {
+              chartPoints.current.splice(0, chartPoints.current.length - 200);
+            }
+          }
         }
       }
     } catch (e3) {

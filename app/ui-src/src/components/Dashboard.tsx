@@ -8,7 +8,7 @@ interface Props {
 
 const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [stats, setStats] = useState<GlobalStats | null>(null)
-  const [history, setHistory] = useState<BandwidthPoint[]>([])
+
   const [users, setUsers] = useState<User[]>([])
   const [timeRange, setTimeRange] = useState('1h')
   const chartBuf = useRef<any[]>([])
@@ -23,18 +23,35 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
       setStats(s)
       setUsers(u)
 
-      // 计算 since：取 chartBuf 中最新的时间戳
-      const latest = chartBuf.current.length > 0
-        ? chartBuf.current[chartBuf.current.length - 1].timestamp
-        : ''
+      if (firstLoad.current) {
+        firstLoad.current = false
+        // 首次：全量拉取 100 点
+        const pts = await getStatsHistory(0, getStartTime(timeRange), '')
+        if (pts?.length > 0) {
+          chartBuf.current = pts.map(p => ({ ...p }))
 
-      const pts = await getStatsHistory(0, latest || getStartTime(timeRange), '')
-      if (pts?.length > 0) {
-        chartBuf.current = pts.map(p => ({ ...p }))
-        if (chartBuf.current.length > 200) {
-          chartBuf.current.splice(0, chartBuf.current.length - 200)
         }
-        setHistory(pts)
+      } else {
+        // 增量：传 since=最新时间戳，后端返回 min(100, 新点数)
+        const latest = chartBuf.current.length > 0
+          ? chartBuf.current[chartBuf.current.length - 1].timestamp
+          : ''
+        if (latest) {
+          const pts = await getStatsHistory(0, latest, '')
+          if (pts?.length > 0) {
+            // 去重追加
+            const seen = new Set(chartBuf.current.map(p => p.timestamp))
+            for (const p of pts) {
+              if (!seen.has(p.timestamp)) {
+                chartBuf.current.push(p)
+                seen.add(p.timestamp)
+              }
+            }
+            if (chartBuf.current.length > 200) {
+              chartBuf.current.splice(0, chartBuf.current.length - 200)
+            }
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to load dashboard data', e)

@@ -35,17 +35,33 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
       setUser(u)
       setStats(s)
 
-      // 计算 since：取 chartBuf 中最新的时间戳
-      const latest = chartPoints.current.length > 0
-        ? chartPoints.current[chartPoints.current.length - 1].timestamp
-        : getStartTime(timeRange)
-
-      const t = await getUserTraffic(userId, latest, '')
-      setTraffic(t)
-      if (t?.chart?.length > 0) {
-        chartPoints.current = t.chart.map((p: any) => ({ ...p }))
-        if (chartPoints.current.length > 200) {
-          chartPoints.current.splice(0, chartPoints.current.length - 200)
+      if (isFirstLoad.current) {
+        isFirstLoad.current = false
+        // 首次：全量拉取
+        const t = await getUserTraffic(userId, getStartTime(timeRange), '')
+        setTraffic(t)
+        if (t?.chart?.length > 0) {
+          chartPoints.current = t.chart.map((p: any) => ({ ...p }))
+        }
+      } else {
+        // 增量：传 since=最新时间戳
+        const latest = chartPoints.current.length > 0
+          ? chartPoints.current[chartPoints.current.length - 1].timestamp
+          : ''
+        if (latest) {
+          const t = await getUserTraffic(userId, latest, '')
+          if (t?.chart?.length > 0) {
+            const seen = new Set(chartPoints.current.map(p => p.timestamp))
+            for (const p of t.chart) {
+              if (!seen.has(p.timestamp)) {
+                chartPoints.current.push(p)
+                seen.add(p.timestamp)
+              }
+            }
+            if (chartPoints.current.length > 200) {
+              chartPoints.current.splice(0, chartPoints.current.length - 200)
+            }
+          }
         }
       }
     } catch (e) {

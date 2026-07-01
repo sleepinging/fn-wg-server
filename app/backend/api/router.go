@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.64"
+var Version = "1.0.65"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -554,17 +554,15 @@ func handleUserTraffic(w http.ResponseWriter, r *http.Request, userID int) {
 
 	maxPoints := 100
 
-	// 如果传了 since（前端最新的时间戳），计算需要返回多少点
+	// 如果传了 since（前端最新的时间戳），只查该时间之后的增量数据
 	if since != "" {
 		sinceTime := db.NormalizeTimeParam(since)
-		// 取最新记录之后的点数 + 100 兜底，确保图表一直有数据
 		count, _ := db.CountBandwidthAfter(userID, sinceTime)
-		need := int(count) + 100
-		if need > maxPoints {
-			maxPoints = need
+		maxPoints = int(count)
+		if maxPoints > 100 {
+			maxPoints = 100
 		}
-		// 不限制 startTime，用默认时范围（1 小时）确保历史数据充足
-		startTime = ""
+		startTime = sinceTime
 	} else {
 		startTime = r.URL.Query().Get("start")
 	}
@@ -657,15 +655,15 @@ func handleStatsHistory(w http.ResponseWriter, r *http.Request) {
 
 	maxPoints := 100
 
-	// 如果传了 since（前端最新的时间戳），计算需要返回多少点
+	// 如果传了 since（前端最新的时间戳），只查该时间之后的增量数据
 	if since != "" {
 		sinceTime := db.NormalizeTimeParam(since)
 		count, _ := db.CountBandwidthAfter(userID, sinceTime)
-		need := int(count) + 100
-		if need > maxPoints {
-			maxPoints = need
+		maxPoints = int(count)
+		if maxPoints > 100 {
+			maxPoints = 100
 		}
-		startTime = "" // 用默认时范围
+		startTime = sinceTime
 	}
 
 	if aggregate == "" && maxPoints > 0 {
