@@ -30,7 +30,6 @@ type Monitor struct {
 	lastUserTime time.Time
 	// 连接追踪：记录上次握手时间，检测上线/离线
 	lastHandshake map[int]int64
-	collectCount int64
 }
 
 // NewMonitor creates a new bandwidth monitor.
@@ -52,12 +51,10 @@ func (m *Monitor) Start() {
 	m.wg.Add(1)
 	m.running = true
 
-	// 初始化带宽缓存写入器（减少磁盘写入频率）
 	flushInterval := db.GetConfigFlushInterval()
 	db.InitBandwidthBuffer(flushInterval)
 	log.Printf("Bandwidth buffer flush interval: %ds", flushInterval)
 
-	// Write PID file
 	pid := os.Getpid()
 	os.WriteFile(m.pidFile, []byte(fmt.Sprintf("%d", pid)), 0644)
 
@@ -73,7 +70,6 @@ func (m *Monitor) Start() {
 func (m *Monitor) Stop() {
 	if m.running {
 		close(m.stopCh)
-		// 等待采集 goroutine 退出，带超时
 		done := make(chan struct{}, 1)
 		go func() {
 			m.wg.Wait()
@@ -100,18 +96,14 @@ func (m *Monitor) collectLoop() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	// Initialize with current values
 	m.lastRx, m.lastTx, _ = wg.GetInterfaceTransfer(m.interfaceName)
 	m.lastTime = time.Now()
 
-	// 重置 per-user 速度缓存（防止上次守护进程运行时的残留数据）
 	m.lastUserRx = make(map[int]int64)
 	m.lastUserTx = make(map[int]int64)
 	m.lastUserTime = time.Now()
 	m.lastHandshake = make(map[int]int64)
-	m.collectCount = 0
 
-	// 启动时自动同步 DB 用户到 WireGuard 内核（防止之前新增用户时守护进程不在线）
 	m.syncConfig()
 
 	for {
@@ -124,7 +116,6 @@ func (m *Monitor) collectLoop() {
 	}
 }
 
-// syncConfig 读取 DB 配置和用户，同步到 WireGuard 内核
 func (m *Monitor) syncConfig() {
 	cfg, err := wg.LoadConfig()
 	if err != nil {
@@ -144,8 +135,6 @@ func (m *Monitor) syncConfig() {
 }
 
 func (m *Monitor) collect() {
-	m.collectCount++
-	// Collect global bandwidth
 	currentRx, currentTx, err := wg.GetInterfaceTransfer(m.interfaceName)
 	if err != nil {
 		return
@@ -160,14 +149,12 @@ func (m *Monitor) collect() {
 	rxSpeed := math.Max(0, float64(currentRx-m.lastRx)/elapsed)
 	txSpeed := math.Max(0, float64(currentTx-m.lastTx)/elapsed)
 
-	// Save global bandwidth point（缓存写入，非实时入库）
 	db.BufferedSaveGlobalBandwidthPoint(currentRx, currentTx, rxSpeed, txSpeed)
 
 	m.lastRx = currentRx
 	m.lastTx = currentTx
 	m.lastTime = now
 
-	// Collect per-user bandwidth
 	m.collectPerUserBandwidth()
 }
 
@@ -204,27 +191,23 @@ func (m *Monitor) collectPerUserBandwidth() {
 			continue
 		}
 
-		// 检测上线/离线（握手时间变化）
+		// 检测上线/离线
 		prevHS := m.lastHandshake[userID]
 		if prevHS == 0 && peer.LatestHandshake > 0 {
-			// 上线：仅当没有活跃连接时才记录（去重）
 			if !db.HasActiveConnection(userID) {
 				if u, ok := userByID[userID]; ok {
 					db.RecordConnection(userID, u.Username, u.InternalIP, peer.Endpoint)
 				}
 			}
 		} else if prevHS > 0 && peer.LatestHandshake == 0 {
-			// 离线
 			db.UpdateConnectionOnDisconnect(userID, peer.TransferRx, peer.TransferTx)
 		}
 		m.lastHandshake[userID] = peer.LatestHandshake
 
-		// 每 30s 更新活跃连接的流量（不是只在离线时写）
-		if peer.LatestHandshake > 0 && m.collectCount%30 == 0 {
-			db.UpdateActiveConnectionTraffic(userID, peer.TransferRx, peer.TransferTx)
-		}
+		// 会话流量缓存，随带宽 buffer 10s 一并 flush 到 DB
+		db.BufferedSessionTraffic(userID, peer.TransferRx, peer.TransferTx)
 
-		// 计算实时速度
+		// 实时速度
 		rxSpeed := float64(0)
 		txSpeed := float64(0)
 		if prevRx, ok := m.lastUserRx[userID]; ok {
@@ -236,7 +219,6 @@ func (m *Monitor) collectPerUserBandwidth() {
 		m.lastUserRx[userID] = peer.TransferRx
 		m.lastUserTx[userID] = peer.TransferTx
 
-		// 缓存写入，非实时入库
 		db.BufferedSaveBandwidthPoint(userID, peer.TransferRx, peer.TransferTx, rxSpeed, txSpeed)
 	}
 	m.lastUserTime = now

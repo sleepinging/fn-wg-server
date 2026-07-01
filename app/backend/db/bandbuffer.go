@@ -18,11 +18,12 @@ type bufferedPoint struct {
 }
 
 var (
-	bufMu          sync.Mutex
-	pointBuf       []bufferedPoint
-	flushInterval  time.Duration
-	bufRunning     bool
-	bufStopCh      chan struct{}
+	bufMu            sync.Mutex
+	pointBuf         []bufferedPoint
+	sessionTraffic   = make(map[int][2]int64) // userID -> [rx, tx]
+	flushInterval    time.Duration
+	bufRunning       bool
+	bufStopCh        chan struct{}
 )
 
 // InitBandwidthBuffer 初始化带宽缓存写入器
@@ -87,6 +88,13 @@ func BufferedSaveGlobalBandwidthPoint(rxBytes, txBytes int64, rxSpeed, txSpeed f
 	BufferedSaveBandwidthPoint(0, rxBytes, txBytes, rxSpeed, txSpeed)
 }
 
+// BufferedSessionTraffic records peer transfer for session traffic display.
+func BufferedSessionTraffic(userID int, rx, tx int64) {
+	bufMu.Lock()
+	sessionTraffic[userID] = [2]int64{rx, tx}
+	bufMu.Unlock()
+}
+
 func flushLoop() {
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
@@ -102,19 +110,33 @@ func flushLoop() {
 
 func flushNow() {
 	bufMu.Lock()
-	if len(pointBuf) == 0 {
-		bufMu.Unlock()
-		return
-	}
 	batch := pointBuf
 	pointBuf = nil
+	traffic := make(map[int][2]int64, len(sessionTraffic))
+	for k, v := range sessionTraffic {
+		traffic[k] = v
+	}
 	bufMu.Unlock()
 
-	if err := batchInsert(batch); err != nil {
-		log.Printf("Bandwidth batch insert error: %v", err)
+	if len(batch) > 0 {
+		if err := batchInsert(batch); err != nil {
+			log.Printf("Bandwidth batch insert error: %v", err)
+		}
+	}
+	if len(traffic) > 0 {
+		flushSessionTraffic(traffic)
 	}
 
 	cleanupOnce()
+}
+
+func flushSessionTraffic(traffic map[int][2]int64) {
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+	for userID, v := range traffic {
+		db.Exec(`UPDATE connection_log SET rx_bytes = ?, tx_bytes = ?
+			WHERE user_id = ? AND disconnected_at IS NULL`, v[0], v[1], userID)
+	}
 }
 
 // batchInsert 批量插入带宽数据（ms 时间戳）
