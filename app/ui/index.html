@@ -10255,28 +10255,18 @@ const createUser = (data) => api.post("/users", data).then((r2) => r2.data);
 const deleteUser = (id2) => api.delete(`/users/${id2}`).then((r2) => r2.data);
 const getUserStats = (id2) => api.get(`/users/${id2}/stats`).then((r2) => r2.data);
 const getUserHistory = (id2, page = 1, pageSize = 20) => api.get(`/users/${id2}/history?page=${page}&pageSize=${pageSize}`).then((r2) => r2.data);
-const getUserTraffic = (id2, start = "", end = "", raw = "") => {
-  let params = `end=${encodeURIComponent(end)}&raw=${raw}`;
-  if (start) {
-    const ts = new Date(start).getTime();
-    if (!isNaN(ts)) {
-      params = `startTs=${ts}&` + params;
-    } else {
-      params = `start=${encodeURIComponent(start)}&` + params;
-    }
+const getUserTraffic = (id2, since = "", end = "") => {
+  let params = `end=${encodeURIComponent(end)}`;
+  if (since) {
+    params = `since=${encodeURIComponent(since)}&` + params;
   }
   return api.get(`/users/${id2}/traffic?${params}`).then((r2) => r2.data);
 };
 const getStats = () => api.get("/stats").then((r2) => r2.data);
-const getStatsHistory = (userId = 0, start = "", end = "", raw = "") => {
-  let params = `userId=${userId}&end=${encodeURIComponent(end)}&raw=${raw}`;
-  if (start) {
-    const ts = new Date(start).getTime();
-    if (!isNaN(ts)) {
-      params = `userId=${userId}&startTs=${ts}&` + params.split("&").slice(1).join("&");
-    } else {
-      params = `userId=${userId}&start=${encodeURIComponent(start)}&` + params.split("&").slice(1).join("&");
-    }
+const getStatsHistory = (userId = 0, since = "", end = "") => {
+  let params = `userId=${userId}&end=${encodeURIComponent(end)}`;
+  if (since) {
+    params = `userId=${userId}&since=${encodeURIComponent(since)}&` + params.split("&").slice(1).join("&");
   }
   return api.get(`/stats/history?${params}`).then((r2) => r2.data);
 };
@@ -31965,24 +31955,14 @@ const Dashboard = ({ onViewUser }) => {
       ]);
       setStats(s2);
       setUsers(u2);
-      if (firstLoad.current) {
-        firstLoad.current = false;
-        const h2 = await getStatsHistory(0, getStartTime$1(timeRange), "");
-        setHistory(h2);
-        chartBuf.current = (h2 || []).map((p2) => ({ ...p2 }));
-      } else {
-        const tenSecAgo = new Date(Date.now() - 1e4).toISOString();
-        const newPts = await getStatsHistory(0, tenSecAgo, "", "true");
-        if ((newPts == null ? void 0 : newPts.length) > 0) {
-          const buf = chartBuf.current;
-          const seen = new Set(buf.map((p2) => p2.timestamp));
-          for (const p2 of newPts) {
-            if (seen.has(p2.timestamp)) continue;
-            seen.add(p2.timestamp);
-            buf.push({ ...p2 });
-          }
-          if (buf.length > 200) buf.splice(0, buf.length - 200);
+      const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].timestamp : "";
+      const pts = await getStatsHistory(0, latest || getStartTime$1(timeRange), "");
+      if ((pts == null ? void 0 : pts.length) > 0) {
+        chartBuf.current = pts.map((p2) => ({ ...p2 }));
+        if (chartBuf.current.length > 200) {
+          chartBuf.current.splice(0, chartBuf.current.length - 200);
         }
+        setHistory(pts);
       }
     } catch (e3) {
       console.error("Failed to load dashboard data", e3);
@@ -32370,7 +32350,7 @@ const UserDetail = ({ userId, onBack }) => {
     return () => clearInterval(timer);
   }, [userId, timeRange]);
   const loadData = async () => {
-    var _a, _b;
+    var _a;
     try {
       const [u2, s2] = await Promise.all([
         getUser(userId),
@@ -32378,39 +32358,13 @@ const UserDetail = ({ userId, onBack }) => {
       ]);
       setUser(u2);
       setStats(s2);
-      if (isFirstLoad.current) {
-        isFirstLoad.current = false;
-        const t2 = await getUserTraffic(userId, getStartTime(timeRange), "");
-        setTraffic(t2);
-        if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
-          chartPoints.current = t2.chart.map((p2) => ({
-            time: new Date(p2.timestamp).toLocaleTimeString(),
-            rxSpeed: p2.rxSpeed || 0,
-            txSpeed: p2.txSpeed || 0,
-            rxBytes: p2.rxBytes || 0,
-            txBytes: p2.txBytes || 0
-          }));
-        }
-      } else {
-        const tenSecAgo = new Date(Date.now() - 1e4).toISOString();
-        const t2 = await getUserTraffic(userId, tenSecAgo, "", "true");
-        if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
-          const buf = chartPoints.current;
-          const seen = new Set(buf.map((p2) => p2.time));
-          for (const p2 of t2.chart) {
-            const time2 = new Date(p2.timestamp).toLocaleTimeString();
-            if (seen.has(time2)) continue;
-            seen.add(time2);
-            buf.push({
-              time: time2,
-              rxSpeed: p2.rxSpeed || 0,
-              txSpeed: p2.txSpeed || 0,
-              rxBytes: p2.rxBytes || 0,
-              txBytes: p2.txBytes || 0
-            });
-          }
-          if (buf.length > 200) buf.splice(0, buf.length - 200);
-          setTraffic({ ...t2, chart: buf });
+      const latest = chartPoints.current.length > 0 ? chartPoints.current[chartPoints.current.length - 1].timestamp : getStartTime(timeRange);
+      const t2 = await getUserTraffic(userId, latest, "");
+      setTraffic(t2);
+      if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
+        chartPoints.current = t2.chart.map((p2) => ({ ...p2 }));
+        if (chartPoints.current.length > 200) {
+          chartPoints.current.splice(0, chartPoints.current.length - 200);
         }
       }
     } catch (e3) {

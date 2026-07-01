@@ -38,9 +38,10 @@ func getBandwidthHistoryAgg(userID int, startTime, endTime string, maxPoints int
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
-	startTime = normalizeTimeParam(startTime)
-	endTime = normalizeTimeParam(endTime)
+	startTime = NormalizeTimeParam(startTime)
+	endTime = NormalizeTimeParam(endTime)
 
+	// 从 DB 查
 	query := `SELECT timestamp, rx_bytes, tx_bytes, rx_speed, tx_speed 
 		FROM bandwidth_history WHERE user_id = ?`
 	args := []interface{}{userID}
@@ -61,14 +62,39 @@ func getBandwidthHistoryAgg(userID int, startTime, endTime string, maxPoints int
 	}
 	defer rows.Close()
 
-	points := make([]BandwidthPoint, 0)
+	// 用 map 去重：时间戳 → 点（缓冲区中更新的覆盖 DB 的）
+	pointMap := make(map[string]BandwidthPoint)
 	for rows.Next() {
 		var p BandwidthPoint
 		if err := rows.Scan(&p.Timestamp, &p.RxBytes, &p.TxBytes, &p.RxSpeed, &p.TxSpeed); err != nil {
 			continue
 		}
 		p.Timestamp = toLocalTime(p.Timestamp)
+		pointMap[p.Timestamp] = p
+	}
+
+	// 从缓冲区补充尚未 flush 的数据
+	var bufSince time.Time
+	if startTime != "" {
+		bufSince, _ = time.Parse("2006-01-02 15:04:05", startTime)
+	}
+	bufferPoints := GetBufferedPointsAfter(userID, bufSince)
+	for _, p := range bufferPoints {
+		pointMap[p.Timestamp] = p
+	}
+
+	// 转为有序列表
+	points := make([]BandwidthPoint, 0, len(pointMap))
+	for _, p := range pointMap {
 		points = append(points, p)
+	}
+	// 按时间排序
+	for i := 0; i < len(points); i++ {
+		for j := i + 1; j < len(points); j++ {
+			if points[i].Timestamp > points[j].Timestamp {
+				points[i], points[j] = points[j], points[i]
+			}
+		}
 	}
 
 	// 均匀采样/聚合：如果点数超过 maxPoints
@@ -140,6 +166,26 @@ func getBandwidthHistoryAgg(userID int, startTime, endTime string, maxPoints int
 	return points, nil
 }
 
+// CountBandwidthAfter 统计 user_id 在 since 之后有多少条记录（含缓冲区中未 flush 的数据）
+func CountBandwidthAfter(userID int, since string) (int64, error) {
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+
+	var count int64
+	err := db.QueryRow("SELECT COUNT(*) FROM bandwidth_history WHERE user_id = ? AND timestamp > ?", userID, since).Scan(&count)
+	if err != nil {
+		count = 0
+	}
+
+	// 加上缓冲区中尚未 flush 的点
+	sinceTime, _ := time.Parse("2006-01-02 15:04:05", since)
+	if !sinceTime.IsZero() {
+		count += int64(CountBufferedAfter(userID, sinceTime))
+	}
+
+	return count, nil
+}
+
 // GetLatestBandwidth gets the latest bandwidth point for a user.
 func GetLatestBandwidth(userID int) (*BandwidthPoint, error) {
 	dbLock.RLock()
@@ -156,9 +202,9 @@ func GetLatestBandwidth(userID int) (*BandwidthPoint, error) {
 	return p, nil
 }
 
-// normalizeTimeParam 统一时间参数格式
+// NormalizeTimeParam 统一时间参数格式
 // 前端可能传 ISO 8601（如 2026-07-01T12:36:55.000Z），DB 存储的是 Asia/Shanghai YYYY-MM-DD HH:MM:SS
-func normalizeTimeParam(t string) string {
+func NormalizeTimeParam(t string) string {
 	if t == "" {
 		return t
 	}

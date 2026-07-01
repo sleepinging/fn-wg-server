@@ -35,41 +35,17 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
       setUser(u)
       setStats(s)
 
-      if (isFirstLoad.current) {
-        // 首次：全量拉取 100 个采样点
-        isFirstLoad.current = false
-        const t = await getUserTraffic(userId, getStartTime(timeRange), '')
-        setTraffic(t)
-        if (t?.chart?.length > 0) {
-          chartPoints.current = t.chart.map((p: any) => ({
-            time: new Date(p.timestamp).toLocaleTimeString(),
-            rxSpeed: p.rxSpeed || 0,
-            txSpeed: p.txSpeed || 0,
-            rxBytes: p.rxBytes || 0,
-            txBytes: p.txBytes || 0,
-          }))
-        }
-      } else {
-        // 每秒拉取最近 10 秒的原始数据
-        const tenSecAgo = new Date(Date.now() - 10000).toISOString()
-        const t = await getUserTraffic(userId, tenSecAgo, '', 'true')
-        if (t?.chart?.length > 0) {
-          const buf = chartPoints.current
-          const seen = new Set(buf.map(p => p.time))
-          for (const p of t.chart) {
-            const time = new Date(p.timestamp).toLocaleTimeString()
-            if (seen.has(time)) continue
-            seen.add(time)
-            buf.push({
-              time,
-              rxSpeed: p.rxSpeed || 0,
-              txSpeed: p.txSpeed || 0,
-              rxBytes: p.rxBytes || 0,
-              txBytes: p.txBytes || 0,
-            })
-          }
-          if (buf.length > 200) buf.splice(0, buf.length - 200)
-          setTraffic({ ...t, chart: buf })
+      // 计算 since：取 chartBuf 中最新的时间戳
+      const latest = chartPoints.current.length > 0
+        ? chartPoints.current[chartPoints.current.length - 1].timestamp
+        : getStartTime(timeRange)
+
+      const t = await getUserTraffic(userId, latest, '')
+      setTraffic(t)
+      if (t?.chart?.length > 0) {
+        chartPoints.current = t.chart.map((p: any) => ({ ...p }))
+        if (chartPoints.current.length > 200) {
+          chartPoints.current.splice(0, chartPoints.current.length - 200)
         }
       }
     } catch (e) {

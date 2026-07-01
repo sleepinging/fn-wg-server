@@ -23,25 +23,18 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
       setStats(s)
       setUsers(u)
 
-      if (firstLoad.current) {
-        firstLoad.current = false
-        const h = await getStatsHistory(0, getStartTime(timeRange), '')
-        setHistory(h)
-        chartBuf.current = (h || []).map(p => ({ ...p }))
-      } else {
-        // 每秒拉取最近 10 秒原始数据
-        const tenSecAgo = new Date(Date.now() - 10000).toISOString()
-        const newPts = await getStatsHistory(0, tenSecAgo, '', 'true')
-        if (newPts?.length > 0) {
-          const buf = chartBuf.current
-          const seen = new Set(buf.map(p => p.timestamp))
-          for (const p of newPts) {
-            if (seen.has(p.timestamp)) continue
-            seen.add(p.timestamp)
-            buf.push({ ...p })
-          }
-          if (buf.length > 200) buf.splice(0, buf.length - 200)
+      // 计算 since：取 chartBuf 中最新的时间戳
+      const latest = chartBuf.current.length > 0
+        ? chartBuf.current[chartBuf.current.length - 1].timestamp
+        : ''
+
+      const pts = await getStatsHistory(0, latest || getStartTime(timeRange), '')
+      if (pts?.length > 0) {
+        chartBuf.current = pts.map(p => ({ ...p }))
+        if (chartBuf.current.length > 200) {
+          chartBuf.current.splice(0, chartBuf.current.length - 200)
         }
+        setHistory(pts)
       }
     } catch (e) {
       console.error('Failed to load dashboard data', e)
@@ -72,7 +65,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  // chartData 直接从 chartBuf 读取（BandwidthPoint[]），不经过 history state 二次映射
+  // chartData 直接从 chartBuf 读取
   const chartData = chartBuf.current.map(p => ({
     time: new Date(p.timestamp).toLocaleTimeString(),
     rx: p.rxSpeed || 0,

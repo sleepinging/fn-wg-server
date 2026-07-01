@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.63"
+var Version = "1.0.64"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -547,34 +547,32 @@ func handleUserTraffic(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	// Get chart data
 	startTime := r.URL.Query().Get("start")
 	endTime := r.URL.Query().Get("end")
-	raw := r.URL.Query().Get("raw")
+	since := r.URL.Query().Get("since")
 	aggregate := r.URL.Query().Get("aggregate")
 
-	// 支持数值时间戳（毫秒）
-	if ts := r.URL.Query().Get("startTs"); ts != "" {
-		var sec int64
-		fmt.Sscanf(ts, "%d", &sec)
-		if sec > 0 {
-			startTime = time.UnixMilli(sec).In(time.Local).Format("2006-01-02 15:04:05")
-		}
-	}
-
 	maxPoints := 100
-	if raw == "true" {
-		maxPoints = 0
-	}
 
-	var points []db.BandwidthPoint
-	var ptsErr error
+	// 如果传了 since（前端最新的时间戳），计算需要返回多少点
+	if since != "" {
+		sinceTime := db.NormalizeTimeParam(since)
+		// 取最新记录之后的点数 + 100 兜底，确保图表一直有数据
+		count, _ := db.CountBandwidthAfter(userID, sinceTime)
+		need := int(count) + 100
+		if need > maxPoints {
+			maxPoints = need
+		}
+		// 不限制 startTime，用默认时范围（1 小时）确保历史数据充足
+		startTime = ""
+	} else {
+		startTime = r.URL.Query().Get("start")
+	}
 
 	if aggregate == "" && maxPoints > 0 {
 		aggregate = "max"
 	}
-	points, ptsErr = db.GetBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, aggregate)
-
+	points, ptsErr := db.GetBandwidthHistoryAgg(userID, startTime, endTime, maxPoints, aggregate)
 	if ptsErr != nil {
 		writeError(w, http.StatusInternalServerError, ptsErr.Error())
 		return
@@ -652,28 +650,29 @@ func handleStatsHistory(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(uid, "%d", &userID)
 	}
 
+	since := r.URL.Query().Get("since")
 	startTime := r.URL.Query().Get("start")
 	endTime := r.URL.Query().Get("end")
-	raw := r.URL.Query().Get("raw")
 	aggregate := r.URL.Query().Get("aggregate")
 
-	if ts := r.URL.Query().Get("startTs"); ts != "" {
-		var sec int64
-		fmt.Sscanf(ts, "%d", &sec)
-		if sec > 0 {
-			startTime = time.UnixMilli(sec).In(time.Local).Format("2006-01-02 15:04:05")
+	maxPoints := 100
+
+	// 如果传了 since（前端最新的时间戳），计算需要返回多少点
+	if since != "" {
+		sinceTime := db.NormalizeTimeParam(since)
+		count, _ := db.CountBandwidthAfter(userID, sinceTime)
+		need := int(count) + 100
+		if need > maxPoints {
+			maxPoints = need
 		}
+		startTime = "" // 用默认时范围
 	}
 
-	maxPoints := 100
-	if raw == "true" {
-		maxPoints = 0
-	}
 	if aggregate == "" && maxPoints > 0 {
 		aggregate = "max"
 	}
 
-	if startTime == "" {
+	if since == "" && startTime == "" {
 		startTime = time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")
 	}
 	if endTime == "" {

@@ -174,6 +174,38 @@ func cleanupOnce() {
 	db.Exec("DELETE FROM bandwidth_history WHERE timestamp < ?", cutoff.Format("2006-01-02 15:04:05"))
 }
 
+// CountBufferedAfter 统计缓冲区中 user_id 在 since 之后的点数
+func CountBufferedAfter(userID int, since time.Time) int {
+	bufMu.Lock()
+	defer bufMu.Unlock()
+	count := 0
+	for _, p := range pointBuf {
+		if (userID == 0 || p.UserID == userID) && p.Time.After(since) {
+			count++
+		}
+	}
+	return count
+}
+
+// GetBufferedPointsAfter 返回缓冲区中 user_id 在 since 之后的点
+func GetBufferedPointsAfter(userID int, since time.Time) []BandwidthPoint {
+	bufMu.Lock()
+	defer bufMu.Unlock()
+	var result []BandwidthPoint
+	for _, p := range pointBuf {
+		if (userID == 0 || p.UserID == userID) && p.Time.After(since) {
+			result = append(result, BandwidthPoint{
+				Timestamp: p.Time.In(time.Local).Format("2006-01-02 15:04:05"),
+				RxBytes:   p.RxBytes,
+				TxBytes:   p.TxBytes,
+				RxSpeed:   p.RxSpeed,
+				TxSpeed:   p.TxSpeed,
+			})
+		}
+	}
+	return result
+}
+
 // GetConfigFlushInterval 获取缓存刷新间隔（秒）
 func GetConfigFlushInterval() int {
 	v, err := GetConfig("bandwidth_flush_interval")
