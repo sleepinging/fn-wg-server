@@ -32415,7 +32415,13 @@ const UserDetail = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k2));
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
-  const chartData = chartPoints.current.slice();
+  const chartData = chartPoints.current.map((p2) => ({
+    time: new Date(p2.ts).toLocaleTimeString(),
+    rxSpeed: p2.rxSpeed || 0,
+    txSpeed: p2.txSpeed || 0,
+    rxBytes: p2.rxBytes || 0,
+    txBytes: p2.txBytes || 0
+  }));
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId);

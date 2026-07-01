@@ -85,8 +85,14 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  // chartData 从滚动缓冲区读取（ts 是毫秒时间戳）
-  const chartData = chartPoints.current.slice()
+  // chartData 从滚动缓冲区读取，映射 ts→time 给 XAxis 用
+  const chartData = chartPoints.current.map((p: any) => ({
+    time: new Date(p.ts).toLocaleTimeString(),
+    rxSpeed: p.rxSpeed || 0,
+    txSpeed: p.txSpeed || 0,
+    rxBytes: p.rxBytes || 0,
+    txBytes: p.txBytes || 0,
+  }))
 
   const handleExportConfig = async () => {
     try {
