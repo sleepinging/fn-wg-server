@@ -18,7 +18,7 @@ import (
 	"wg-server/wg"
 )
 
-const Version = "1.0.39"
+const Version = "1.0.40"
 
 func init() {
 	// 统一使用 Asia/Shanghai 时区
@@ -111,6 +111,12 @@ func handleCGI() {
 		}
 	}
 
+	// 根路径 / 返回前端 HTML 页面
+	if urlPath == "/" && method == "GET" {
+		serveUIHTML()
+		return
+	}
+
 	// 读取请求体
 	var bodyReader io.Reader
 	contentLength := os.Getenv("CONTENT_LENGTH")
@@ -153,6 +159,30 @@ func handleCGI() {
 
 	// 写响应体
 	os.Stdout.Write(respBody)
+}
+
+func serveUIHTML() {
+	// 查找 UI HTML 文件
+	uiDir := os.Getenv("UI_DIR")
+	if uiDir == "" {
+		// 从可执行路径推断
+		exe, _ := os.Executable()
+		uiDir = filepath.Join(filepath.Dir(filepath.Dir(exe)), "ui")
+	}
+	htmlPath := filepath.Join(uiDir, "index.html")
+
+	data, err := os.ReadFile(htmlPath)
+	if err != nil {
+		log.Printf("Failed to read UI HTML: %v", err)
+		writeCGIError(500, "UI not found")
+		return
+	}
+
+	fmt.Print("Status: 200 OK\r\n")
+	fmt.Print("Content-Type: text/html; charset=utf-8\r\n")
+	fmt.Print("Cache-Control: no-cache\r\n")
+	fmt.Print("\r\n")
+	os.Stdout.Write(data)
 }
 
 func writeCGIError(status int, msg string) {
