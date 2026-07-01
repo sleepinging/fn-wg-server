@@ -32372,12 +32372,11 @@ const UserDetail = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = reactExports.useState("1h");
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
-  const [chartVer, setChartVer] = reactExports.useState(0);
-  const chartPoints = reactExports.useRef([]);
+  const [chartData, setChartData] = reactExports.useState([]);
   const isFirstLoad = reactExports.useRef(true);
   reactExports.useEffect(() => {
     isFirstLoad.current = true;
-    chartPoints.current = [];
+    setChartData([]);
     loadData();
     const timer = setInterval(loadData, 1e3);
     return () => clearInterval(timer);
@@ -32396,25 +32395,40 @@ const UserDetail = ({ userId, onBack }) => {
         const t2 = await getUserTraffic(userId, getStartTime(timeRange), 0);
         setTraffic(t2);
         if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
-          chartPoints.current = t2.chart.map((p2) => ({ ...p2 }));
-          setChartVer((v2) => v2 + 1);
+          setChartData(t2.chart.map((p2) => ({
+            time: new Date(p2.ts).toLocaleTimeString(),
+            rxSpeed: p2.rxSpeed || 0,
+            txSpeed: p2.txSpeed || 0,
+            rxBytes: p2.rxBytes || 0,
+            txBytes: p2.txBytes || 0
+          })));
         }
       } else {
-        const latest = chartPoints.current.length > 0 ? chartPoints.current[chartPoints.current.length - 1].ts : 0;
+        const buf = chartData;
+        const latest = buf.length > 0 ? buf[buf.length - 1].ts || buf[buf.length - 1]._ts : 0;
         if (latest > 0) {
           const t2 = await getUserTraffic(userId, latest, 0);
           if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
-            const seen = new Set(chartPoints.current.map((p2) => p2.ts));
+            const seen = new Set(buf.map((p2) => p2._ts || p2.ts));
+            let changed = false;
             for (const p2 of t2.chart) {
               if (!seen.has(p2.ts)) {
-                chartPoints.current.push(p2);
                 seen.add(p2.ts);
+                buf.push({
+                  time: new Date(p2.ts).toLocaleTimeString(),
+                  rxSpeed: p2.rxSpeed || 0,
+                  txSpeed: p2.txSpeed || 0,
+                  rxBytes: p2.rxBytes || 0,
+                  txBytes: p2.txBytes || 0,
+                  _ts: p2.ts
+                });
+                changed = true;
               }
             }
-            if (chartPoints.current.length > 200) {
-              chartPoints.current.splice(0, chartPoints.current.length - 200);
+            if (changed) {
+              if (buf.length > 200) setChartData(buf.slice(buf.length - 200));
+              else setChartData([...buf]);
             }
-            setChartVer((v2) => v2 + 1);
           }
         }
       }
@@ -32436,13 +32450,6 @@ const UserDetail = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k2));
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
-  const chartData = chartPoints.current.map((p2) => ({
-    time: new Date(p2.ts).toLocaleTimeString(),
-    rxSpeed: p2.rxSpeed || 0,
-    txSpeed: p2.txSpeed || 0,
-    rxBytes: p2.rxBytes || 0,
-    txBytes: p2.txBytes || 0
-  }));
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId);

@@ -15,13 +15,12 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [timeRange, setTimeRange] = useState('1h')
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
-  const [chartVer, setChartVer] = useState(0)
-  const chartPoints = useRef<any[]>([])
+  const [chartData, setChartData] = useState<any[]>([])
   const isFirstLoad = useRef(true)
 
   useEffect(() => {
     isFirstLoad.current = true
-    chartPoints.current = []
+    setChartData([])
     loadData()
     const timer = setInterval(loadData, 1000)
     return () => clearInterval(timer)
@@ -38,32 +37,43 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
 
       if (isFirstLoad.current) {
         isFirstLoad.current = false
-        // 首次：全量拉取
         const t = await getUserTraffic(userId, getStartTime(timeRange), 0)
         setTraffic(t)
         if (t?.chart?.length > 0) {
-          chartPoints.current = t.chart.map((p: any) => ({ ...p }))
-          setChartVer(v => v + 1)
+          setChartData(t.chart.map((p: any) => ({
+            time: new Date(p.ts).toLocaleTimeString(),
+            rxSpeed: p.rxSpeed || 0,
+            txSpeed: p.txSpeed || 0,
+            rxBytes: p.rxBytes || 0,
+            txBytes: p.txBytes || 0,
+          })))
         }
       } else {
-        // 增量：传 since=最新毫秒时间戳
-        const latest = chartPoints.current.length > 0
-          ? chartPoints.current[chartPoints.current.length - 1].ts
-          : 0
+        const buf = chartData
+        const latest = buf.length > 0 ? buf[buf.length - 1].ts || buf[buf.length - 1]._ts : 0
         if (latest > 0) {
           const t = await getUserTraffic(userId, latest, 0)
           if (t?.chart?.length > 0) {
-            const seen = new Set(chartPoints.current.map(p => p.ts))
+            const seen = new Set(buf.map((p: any) => p._ts || p.ts))
+            let changed = false
             for (const p of t.chart) {
               if (!seen.has(p.ts)) {
-                chartPoints.current.push(p)
                 seen.add(p.ts)
+                buf.push({
+                  time: new Date(p.ts).toLocaleTimeString(),
+                  rxSpeed: p.rxSpeed || 0,
+                  txSpeed: p.txSpeed || 0,
+                  rxBytes: p.rxBytes || 0,
+                  txBytes: p.txBytes || 0,
+                  _ts: p.ts,
+                })
+                changed = true
               }
             }
-            if (chartPoints.current.length > 200) {
-              chartPoints.current.splice(0, chartPoints.current.length - 200)
+            if (changed) {
+              if (buf.length > 200) setChartData(buf.slice(buf.length - 200))
+              else setChartData([...buf])
             }
-            setChartVer(v => v + 1)
           }
         }
       }
@@ -87,17 +97,6 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k))
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
-
-  // chartData 从滚动缓冲区读取，映射 ts→time 给 XAxis 用
-  // chartVer 强制在 ref 修改后重渲染
-  const _cv = chartVer
-  const chartData = chartPoints.current.map((p: any) => ({
-    time: new Date(p.ts).toLocaleTimeString(),
-    rxSpeed: p.rxSpeed || 0,
-    txSpeed: p.txSpeed || 0,
-    rxBytes: p.rxBytes || 0,
-    txBytes: p.txBytes || 0,
-  }))
 
   const handleExportConfig = async () => {
     try {
@@ -230,7 +229,6 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         <h3>历史记录</h3>
         <HistoryTable uid={userId} />
       </div>
-      {/* 导出配置弹窗 */}
       {showExportModal && exportConfig && (
         <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
           <div className="modal config-modal" onClick={e => e.stopPropagation()}>
