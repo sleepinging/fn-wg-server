@@ -32509,6 +32509,10 @@ const UserDetail = ({ userId, onBack }) => {
           /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: exportConfig.clientAddress })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "预共享密钥" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: exportConfig.presharedKey ? exportConfig.presharedKey.substring(0, 20) + "..." : "无" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "config-row", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "DNS" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: exportConfig.clientDNS })
         ] })

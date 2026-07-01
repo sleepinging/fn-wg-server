@@ -47,7 +47,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.45"
+var Version = "1.0.46"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -1174,7 +1174,12 @@ func handleUserConfig(w http.ResponseWriter, r *http.Request, userID int) {
 	allowedIPs := computeAllowedIPs(cfg.Address)
 
 	// 构建配置文件文本
-	config := fmt.Sprintf(`[Interface]
+	var config string
+	pskLine := ""
+	if user.PresharedKey != "" {
+		pskLine = fmt.Sprintf("PresharedKey = %s\n", user.PresharedKey)
+	}
+	config = fmt.Sprintf(`[Interface]
 PrivateKey = %s
 Address = %s
 DNS = %s
@@ -1182,7 +1187,7 @@ MTU = %d
 
 [Peer]
 PublicKey = %s
-Endpoint = %s
+%sEndpoint = %s
 AllowedIPs = %s
 PersistentKeepalive = %d
 `,
@@ -1191,6 +1196,7 @@ PersistentKeepalive = %d
 		dns,
 		user.MTU,
 		cfg.PublicKey,
+		pskLine,
 		serverEndpoint,
 		allowedIPs,
 		user.PersistentKeepalive,
@@ -1209,6 +1215,7 @@ PersistentKeepalive = %d
 			"serverPublicKey":  cfg.PublicKey,
 			"serverEndpoint":   serverEndpoint,
 			"persistentKeepalive": user.PersistentKeepalive,
+			"presharedKey":     user.PresharedKey,
 			"filename":         fmt.Sprintf("wg-client-%s.conf", user.Username),
 		})
 		return

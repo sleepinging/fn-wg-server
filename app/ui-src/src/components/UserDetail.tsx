@@ -204,6 +204,10 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
                 <code>{exportConfig.clientAddress}</code>
               </div>
               <div className="config-row">
+                <label>预共享密钥</label>
+                <code>{exportConfig.presharedKey ? exportConfig.presharedKey.substring(0, 20) + '...' : '无'}</code>
+              </div>
+              <div className="config-row">
                 <label>DNS</label>
                 <code>{exportConfig.clientDNS}</code>
               </div>
