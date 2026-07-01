@@ -46,7 +46,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.31"
+var Version = "1.0.33"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -461,6 +461,9 @@ func deleteUser(w http.ResponseWriter, r *http.Request, userID int) {
 
 	db.Log("INFO", fmt.Sprintf("Deleted user: %s (ID: %d) - forced offline", user.Username, userID))
 
+	// 通知守护进程重新应用配置（移除对等端）
+	applyWGConfig()
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "user deleted and forced offline"})
 }
 
@@ -669,10 +672,14 @@ func getConfig(w http.ResponseWriter, r *http.Request) {
 		autoStart = v
 	}
 
+	// 检测当前公网 IP 作为域名提示
+	currentIP := getExternalIP()
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"wireguard":            cfg,
 		"historyRetentionDays": historyDays,
 		"autoStart":            autoStart,
+		"detectedIP":           currentIP,
 	})
 }
 
@@ -820,10 +827,10 @@ func serviceStart(w http.ResponseWriter, r *http.Request) {
 	// Enable IP forwarding
 	exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
 
-	// Initialize WireGuard interface
-	if err := wg.InitInterface(); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to start WireGuard: "+err.Error())
-		return
+	// 通知守护进程初始化 WireGuard 接口
+	dataDir := os.Getenv("TRIM_PKGVAR")
+	if dataDir != "" {
+		daemon.WriteConfigTrigger(dataDir, "init")
 	}
 
 	// Start monitor daemon
@@ -1138,12 +1145,15 @@ func handleUserConfig(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	// 获取服务端公网地址
-	serverEndpoint := getExternalIP()
-	if serverEndpoint == "" || serverEndpoint == "Unknown" {
-		serverEndpoint = "YOUR_SERVER_IP"
+	// 获取服务端公网地址：优先使用配置的域名，其次自动检测
+	serverDomain := cfg.ServerDomain
+	if serverDomain == "" {
+		serverDomain = getExternalIP()
 	}
-	serverEndpoint = fmt.Sprintf("%s:%d", serverEndpoint, cfg.ListenPort)
+	if serverDomain == "" || serverDomain == "Unknown" {
+		serverDomain = "YOUR_SERVER_IP"
+	}
+	serverEndpoint := fmt.Sprintf("%s:%d", serverDomain, cfg.ListenPort)
 
 	// 准备 DNS
 	dns := cfg.DNS

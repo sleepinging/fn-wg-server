@@ -28,6 +28,7 @@ type WGConfig struct {
 	MTU           int    `json:"mtu"`
 	PostUp        string `json:"postUp"`
 	PostDown      string `json:"postDown"`
+	ServerDomain  string `json:"serverDomain"`
 }
 
 // DefaultConfig returns the default WireGuard configuration.
@@ -143,6 +144,9 @@ func LoadConfig() (*WGConfig, error) {
 	if v, ok := all["interface_name"]; ok {
 		cfg.InterfaceName = v
 	}
+	if v, ok := all["server_domain"]; ok {
+		cfg.ServerDomain = v
+	}
 	return &cfg, nil
 }
 
@@ -157,6 +161,7 @@ func SaveConfig(cfg WGConfig) error {
 		"wg_post_up":     cfg.PostUp,
 		"wg_post_down":   cfg.PostDown,
 		"interface_name": cfg.InterfaceName,
+		"server_domain":  cfg.ServerDomain,
 	}
 	for k, v := range pairs {
 		if err := db.SetConfig(k, v); err != nil {

@@ -154,6 +154,11 @@ const Config: React.FC = () => {
           <input type="number" value={wg.mtu || 1420} onChange={e => setWg({...wg, mtu: parseInt(e.target.value) || 1420})} />
         </div>
         <div className="form-group">
+          <label>服务端域名/公网IP</label>
+          <input type="text" value={wg.serverDomain || ''} onChange={e => setWg({...wg, serverDomain: e.target.value})} placeholder={config?.detectedIP || '自动检测'} />
+          <small>留空则自动检测公网 IP，客户端配置中的 Endpoint 使用此值</small>
+        </div>
+        <div className="form-group">
           <label>PostUp</label>
           <textarea rows={2} value={wg.postUp || ''} onChange={e => setWg({...wg, postUp: e.target.value})} />
         </div>

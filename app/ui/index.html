@@ -32688,6 +32688,11 @@ const Config = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: wg2.mtu || 1420, onChange: (e3) => setWg({ ...wg2, mtu: parseInt(e3.target.value) || 1420 }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "服务端域名/公网IP" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", value: wg2.serverDomain || "", onChange: (e3) => setWg({ ...wg2, serverDomain: e3.target.value }), placeholder: (config2 == null ? void 0 : config2.detectedIP) || "自动检测" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: "留空则自动检测公网 IP，客户端配置中的 Endpoint 使用此值" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "PostUp" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("textarea", { rows: 2, value: wg2.postUp || "", onChange: (e3) => setWg({ ...wg2, postUp: e3.target.value }) })
       ] }),
