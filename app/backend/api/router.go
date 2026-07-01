@@ -48,7 +48,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.58"
+var Version = "1.0.59"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -622,13 +622,16 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 	// Get service uptime
 	uptime := getServiceUptime()
 
+	// 总用户数从数据库取（而非 WireGuard 内核对等端数）
+	allUsers, _ := db.ListUsers()
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"rxBytes":    rxBytes,
 		"txBytes":    txBytes,
 		"rxSpeed":    rxSpeed,
 		"txSpeed":    txSpeed,
 		"onlineCount": onlineCount,
-		"totalPeers":  len(peers),
+		"totalPeers":  len(allUsers),
 		"externalIP": externalIP,
 		"internalIP": internalIP,
 		"uptime":     uptime,
