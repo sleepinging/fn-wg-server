@@ -15,6 +15,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [dbStats, setDbStats] = useState<any>(null)
   const [chartLoading, setChartLoading] = useState(false)
   const chartBuf = useRef<any[]>([])
+  const newBuf = useRef<any[]>([])  // 增量缓冲，积累够再合并
   const [domain, setDomain] = useState<[number,number]>([Date.now() - 3600000, Date.now()])
   const firstLoad = useRef(true)
   const dbLastFetch = useRef(0)
@@ -56,27 +57,27 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
         if (latest > 0) {
           const pts = await getStatsHistory(0, latest, 0)
           if (pts?.length > 0) {
-            const seen = new Set(chartBuf.current.map(p => p.ts))
-            let newCount = 0
+            // 新数据先进入缓冲区
             for (const p of pts) {
-              if (!seen.has(p.ts)) {
-                chartBuf.current.push(p)
-                seen.add(p.ts)
-                newCount++
-              }
+              newBuf.current.push(p)
             }
-            // 累积后重采样到100个均匀点，保持跨距不超限
-            if (chartBuf.current.length > 100 && newCount > 0) {
-              const timeSpan = chartBuf.current[chartBuf.current.length - 1].ts - chartBuf.current[0].ts
-              if (chartBuf.current.length > 100) {
-                const step = (chartBuf.current.length - 1) / 99  // 100个点=99段
-                const resampled = []
-                for (let i = 0; i < 100; i++) {
-                  const idx = Math.round(i * step)
-                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)])
-                }
-                chartBuf.current = resampled
-              }
+            // 计算旧数据每个点的时间跨度
+            const oldSpan = latest - chartBuf.current[0].ts
+            const spanPerOldPoint = oldSpan / chartBuf.current.length
+            const newBufSpan = newBuf.current[newBuf.current.length - 1].ts - newBuf.current[0].ts
+            // 缓冲区累积够1个旧点的时间跨度后合并一次
+            if (newBufSpan >= spanPerOldPoint) {
+              const maxRx = Math.max(...newBuf.current.map((p: any) => p.rxSpeed || 0))
+              const maxTx = Math.max(...newBuf.current.map((p: any) => p.txSpeed || 0))
+              const totalRx = newBuf.current.reduce((s: number, p: any) => s + (p.rxBytes || 0), 0)
+              const totalTx = newBuf.current.reduce((s: number, p: any) => s + (p.txBytes || 0), 0)
+              chartBuf.current.push({
+                ts: newBuf.current[newBuf.current.length - 1].ts,
+                rxSpeed: maxRx, txSpeed: maxTx,
+                rxBytes: totalRx, txBytes: totalTx,
+              })
+              chartBuf.current = chartBuf.current.slice(1)  // 丢弃最旧1点
+              newBuf.current = []  // 清空缓冲
             }
           }
         }
@@ -94,6 +95,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   useEffect(() => {
     firstLoad.current = true
     chartBuf.current = []
+    newBuf.current = []
     setChartLoading(true)
     loadData().finally(() => setChartLoading(false))
     const timer = setInterval(loadData, intervalSec * 1000)

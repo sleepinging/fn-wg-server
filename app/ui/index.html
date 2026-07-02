@@ -90973,6 +90973,7 @@ const Dashboard = ({ onViewUser }) => {
   const [dbStats, setDbStats] = reactExports.useState(null);
   const [chartLoading, setChartLoading] = reactExports.useState(false);
   const chartBuf = reactExports.useRef([]);
+  const newBuf = reactExports.useRef([]);
   const [domain, setDomain] = reactExports.useState([Date.now() - 36e5, Date.now()]);
   const firstLoad = reactExports.useRef(true);
   const dbLastFetch = reactExports.useRef(0);
@@ -91008,26 +91009,26 @@ const Dashboard = ({ onViewUser }) => {
         if (latest > 0) {
           const pts = await getStatsHistory(0, latest, 0);
           if ((pts == null ? void 0 : pts.length) > 0) {
-            const seen = new Set(chartBuf.current.map((p2) => p2.ts));
-            let newCount = 0;
             for (const p2 of pts) {
-              if (!seen.has(p2.ts)) {
-                chartBuf.current.push(p2);
-                seen.add(p2.ts);
-                newCount++;
-              }
+              newBuf.current.push(p2);
             }
-            if (chartBuf.current.length > 100 && newCount > 0) {
-              const timeSpan = chartBuf.current[chartBuf.current.length - 1].ts - chartBuf.current[0].ts;
-              if (chartBuf.current.length > 100) {
-                const step = (chartBuf.current.length - 1) / 99;
-                const resampled = [];
-                for (let i = 0; i < 100; i++) {
-                  const idx = Math.round(i * step);
-                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)]);
-                }
-                chartBuf.current = resampled;
-              }
+            const oldSpan = latest - chartBuf.current[0].ts;
+            const spanPerOldPoint = oldSpan / chartBuf.current.length;
+            const newBufSpan = newBuf.current[newBuf.current.length - 1].ts - newBuf.current[0].ts;
+            if (newBufSpan >= spanPerOldPoint) {
+              const maxRx = Math.max(...newBuf.current.map((p2) => p2.rxSpeed || 0));
+              const maxTx = Math.max(...newBuf.current.map((p2) => p2.txSpeed || 0));
+              const totalRx = newBuf.current.reduce((s2, p2) => s2 + (p2.rxBytes || 0), 0);
+              const totalTx = newBuf.current.reduce((s2, p2) => s2 + (p2.txBytes || 0), 0);
+              chartBuf.current.push({
+                ts: newBuf.current[newBuf.current.length - 1].ts,
+                rxSpeed: maxRx,
+                txSpeed: maxTx,
+                rxBytes: totalRx,
+                txBytes: totalTx
+              });
+              chartBuf.current = chartBuf.current.slice(1);
+              newBuf.current = [];
             }
           }
         }
@@ -91042,6 +91043,7 @@ const Dashboard = ({ onViewUser }) => {
   reactExports.useEffect(() => {
     firstLoad.current = true;
     chartBuf.current = [];
+    newBuf.current = [];
     setChartLoading(true);
     loadData().finally(() => setChartLoading(false));
     const timer = setInterval(loadData, intervalSec * 1e3);
