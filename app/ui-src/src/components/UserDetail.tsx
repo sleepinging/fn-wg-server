@@ -93,12 +93,16 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [renderKey, setRenderKey] = useState(0)
 
   const chartData = chartBuf.current.map((p: any) => ({
+    ts: p.ts,
     time: new Date(p.ts).toLocaleTimeString(),
     rxSpeed: p.rxSpeed || 0,
     txSpeed: p.txSpeed || 0,
     rxBytes: p.rxBytes || 0,
     txBytes: p.txBytes || 0,
   }))
+
+  const domainStart = chartData.length > 0 ? chartData[0].ts : 0
+  const domainEnd = chartData.length > 0 ? chartData[chartData.length - 1].ts : 0
 
   const handleExportConfig = async () => {
     try {
@@ -226,7 +230,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         <ResponsiveContainer width="100%" height={250} key={renderKey}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis dataKey="time" fontSize={12} />
+            <XAxis dataKey="ts" type="number" domain={[domainStart, domainEnd]} tickFormatter={(v: number) => new Date(v).toLocaleTimeString()} fontSize={12} />
             <YAxis fontSize={12} tickFormatter={v => formatSpeed(v)} />
             <Tooltip formatter={(value: number) => [formatSpeed(value), '']} />
             <Line type="monotone" dataKey="rxSpeed" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} isAnimationActive={false} />

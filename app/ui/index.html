@@ -32018,10 +32018,13 @@ const Dashboard = ({ onViewUser }) => {
     return parseFloat((bps / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
   };
   const chartData = chartBuf.current.map((p2) => ({
+    ts: p2.ts,
     time: new Date(p2.ts).toLocaleTimeString(),
     rx: p2.rxSpeed || 0,
     tx: p2.txSpeed || 0
   }));
+  const domainStart = chartData.length > 0 ? chartData[0].ts : 0;
+  const domainEnd = chartData.length > 0 ? chartData[chartData.length - 1].ts : 0;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "dashboard", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stats-grid", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
@@ -32072,7 +32075,7 @@ const Dashboard = ({ onViewUser }) => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ResponsiveContainer, { width: "100%", height: 300, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(LineChart, { data: chartData, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CartesianGrid, { strokeDasharray: "3 3", stroke: "#e0e0e0" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "time", fontSize: 12 }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "ts", type: "number", domain: [domainStart, domainEnd], tickFormatter: (v2) => new Date(v2).toLocaleTimeString(), fontSize: 12 }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(YAxis, { fontSize: 12, tickFormatter: (v2) => formatSpeed(v2) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { formatter: (value) => [formatSpeed(value), ""] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rx", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false, isAnimationActive: false }),
@@ -32463,12 +32466,15 @@ const UserDetail = ({ userId, onBack }) => {
   };
   const [renderKey2, setRenderKey] = reactExports.useState(0);
   const chartData = chartBuf.current.map((p2) => ({
+    ts: p2.ts,
     time: new Date(p2.ts).toLocaleTimeString(),
     rxSpeed: p2.rxSpeed || 0,
     txSpeed: p2.txSpeed || 0,
     rxBytes: p2.rxBytes || 0,
     txBytes: p2.txBytes || 0
   }));
+  const domainStart = chartData.length > 0 ? chartData[0].ts : 0;
+  const domainEnd = chartData.length > 0 ? chartData[chartData.length - 1].ts : 0;
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId);
@@ -32594,7 +32600,7 @@ const UserDetail = ({ userId, onBack }) => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ResponsiveContainer, { width: "100%", height: 250, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(LineChart, { data: chartData, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CartesianGrid, { strokeDasharray: "3 3", stroke: "#e0e0e0" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "time", fontSize: 12 }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "ts", type: "number", domain: [domainStart, domainEnd], tickFormatter: (v2) => new Date(v2).toLocaleTimeString(), fontSize: 12 }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(YAxis, { fontSize: 12, tickFormatter: (v2) => formatSpeed(v2) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { formatter: (value) => [formatSpeed(value), ""] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rxSpeed", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false, isAnimationActive: false }),

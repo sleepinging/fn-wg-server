@@ -52,7 +52,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.0.83"
+var Version = "1.0.84"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
