@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getUser, getUserStats, getUserTraffic, getUserConfig, User } from '../api'
 import HistoryTable from './HistoryTable'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import DebugBar from './DebugBar'
 
 interface Props {
   userId: number
@@ -285,6 +286,13 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
           </div>
         </div>
       )}
+      <DebugBar
+        dataPoints={chartBuf.current.length}
+        firstTs={chartBuf.current[0]?.ts || 0}
+        lastTs={chartBuf.current[chartBuf.current.length - 1]?.ts || 0}
+        domainStart={domainRef.current[0]}
+        domainEnd={domainRef.current[1]}
+      />
     </div>
   )
 }

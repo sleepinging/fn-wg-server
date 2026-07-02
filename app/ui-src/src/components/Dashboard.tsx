@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getStats, getStatsHistory, getUsers, getDBStats, GlobalStats, BandwidthPoint, User } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import DebugBar from './DebugBar'
 
 interface Props {
   onViewUser: (userId: number) => void
@@ -198,6 +199,13 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
           <strong>数据缓存:</strong> 带宽 {dbStats.bandwidthRows?.toLocaleString()} 条 | 日志 {dbStats.logRows?.toLocaleString()} 条 | 数据库 {formatBytes(dbStats.dbSize || 0)}
         </div>
       )}
+      <DebugBar
+        dataPoints={chartBuf.current.length}
+        firstTs={chartBuf.current[0]?.ts || 0}
+        lastTs={chartBuf.current[chartBuf.current.length - 1]?.ts || 0}
+        domainStart={domainRef.current[0]}
+        domainEnd={domainRef.current[1]}
+      />
     </div>
   )
 }

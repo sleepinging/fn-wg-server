@@ -31941,8 +31941,63 @@ var LineChart = generateCategoricalChart({
   }],
   formatAxisMap
 });
+function DebugBar({ dataPoints, firstTs, lastTs, domainStart, domainEnd }) {
+  const [visible, setVisible] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    const p2 = new URLSearchParams(window.location.search);
+    setVisible(p2.get("debug") === "1");
+  }, []);
+  if (!visible) return null;
+  const fmt = (ts) => {
+    if (ts <= 0) return "-";
+    const d2 = new Date(ts);
+    return `${d2.getHours().toString().padStart(2, "0")}:${d2.getMinutes().toString().padStart(2, "0")}:${d2.getSeconds().toString().padStart(2, "0")}`;
+  };
+  const spanSec = lastTs > firstTs ? ((lastTs - firstTs) / 1e3).toFixed(0) : "-";
+  const domainSpan = domainEnd > domainStart ? ((domainEnd - domainStart) / 1e3).toFixed(0) : "-";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: {
+    position: "fixed",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    background: "#1a1a2e",
+    color: "#00ff88",
+    fontSize: 11,
+    padding: "4px 12px",
+    fontFamily: "monospace",
+    display: "flex",
+    gap: 20,
+    flexWrap: "wrap",
+    zIndex: 9999,
+    borderTop: "1px solid #333"
+  }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+      "📊 数据:",
+      dataPoints,
+      "pts"
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+      "⏱ 首:",
+      fmt(firstTs),
+      " 尾:",
+      fmt(lastTs),
+      " 跨度:",
+      spanSec,
+      "s"
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+      "🎯 域:",
+      fmt(domainStart),
+      " → ",
+      fmt(domainEnd),
+      " 跨度:",
+      domainSpan,
+      "s"
+    ] })
+  ] });
+}
 const Dashboard = ({ onViewUser }) => {
-  var _a, _b;
+  var _a, _b, _c, _d;
   const [stats, setStats] = reactExports.useState(null);
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
@@ -32116,7 +32171,17 @@ const Dashboard = ({ onViewUser }) => {
       (_b = dbStats.logRows) == null ? void 0 : _b.toLocaleString(),
       " 条 | 数据库 ",
       formatBytes2(dbStats.dbSize || 0)
-    ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      DebugBar,
+      {
+        dataPoints: chartBuf.current.length,
+        firstTs: ((_c = chartBuf.current[0]) == null ? void 0 : _c.ts) || 0,
+        lastTs: ((_d = chartBuf.current[chartBuf.current.length - 1]) == null ? void 0 : _d.ts) || 0,
+        domainStart: domainRef.current[0],
+        domainEnd: domainRef.current[1]
+      }
+    )
   ] });
 };
 function padTimeRange$1(pts, startMs) {
@@ -32390,6 +32455,7 @@ function formatBytesSimple(bytes) {
   return parseFloat((bytes / Math.pow(k2, i)).toFixed(2)) + " " + sizes[i];
 }
 const UserDetail = ({ userId, onBack }) => {
+  var _a, _b;
   const [user, setUser] = reactExports.useState(null);
   const [stats, setStats] = reactExports.useState(null);
   const [traffic, setTraffic] = reactExports.useState(null);
@@ -32401,7 +32467,7 @@ const UserDetail = ({ userId, onBack }) => {
   const domainRef = reactExports.useRef([Date.now() - 36e5, Date.now()]);
   const firstLoad = reactExports.useRef(true);
   const loadData = reactExports.useCallback(async () => {
-    var _a, _b;
+    var _a2, _b2;
     try {
       const [u2, s2] = await Promise.all([
         getUser(userId),
@@ -32414,7 +32480,7 @@ const UserDetail = ({ userId, onBack }) => {
         const startMs = getStartTime(timeRange);
         const t2 = await getUserTraffic(userId, startMs, 0);
         setTraffic(t2);
-        if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
+        if (((_a2 = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a2.length) > 0) {
           chartBuf.current = padTimeRange(t2.chart, startMs);
         }
         if (chartBuf.current.length === 0) {
@@ -32426,7 +32492,7 @@ const UserDetail = ({ userId, onBack }) => {
         const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
         if (latest > 0) {
           const t2 = await getUserTraffic(userId, latest, 0);
-          if (((_b = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b.length) > 0) {
+          if (((_b2 = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b2.length) > 0) {
             const seen = new Set(chartBuf.current.map((p2) => p2.ts));
             for (const p2 of t2.chart) {
               if (!seen.has(p2.ts)) {
@@ -32653,7 +32719,17 @@ const UserDetail = ({ userId, onBack }) => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setShowExportModal(false), children: "关闭" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: downloadConfig, children: "下载 .conf 文件" })
       ] })
-    ] }) })
+    ] }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      DebugBar,
+      {
+        dataPoints: chartBuf.current.length,
+        firstTs: ((_a = chartBuf.current[0]) == null ? void 0 : _a.ts) || 0,
+        lastTs: ((_b = chartBuf.current[chartBuf.current.length - 1]) == null ? void 0 : _b.ts) || 0,
+        domainStart: domainRef.current[0],
+        domainEnd: domainRef.current[1]
+      }
+    )
   ] });
 };
 function padTimeRange(pts, startMs) {
