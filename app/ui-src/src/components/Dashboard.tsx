@@ -10,6 +10,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [stats, setStats] = useState<GlobalStats | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [timeRange, setTimeRange] = useState('1h')
+  const [intervalSec, setIntervalSec] = useState(3)
   const [dbStats, setDbStats] = useState<any>(null)
   const chartBuf = useRef<any[]>([])
   const firstLoad = useRef(true)
@@ -65,9 +66,9 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
     firstLoad.current = true
     chartBuf.current = []
     loadData()
-    const timer = setInterval(loadData, 1000)
+    const timer = setInterval(loadData, intervalSec * 1000)
     return () => clearInterval(timer)
-  }, [loadData])
+  }, [loadData, intervalSec])
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B'
@@ -119,6 +120,14 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
       <div className="chart-section">
         <div className="section-header">
           <h3>总带宽使用</h3>
+          <span style={{marginLeft:8,fontSize:13}}>刷新</span>
+          <select value={intervalSec} onChange={e => setIntervalSec(Number(e.target.value))} style={{marginLeft:4}}>
+            <option value={1}>1s</option>
+            <option value={3}>3s</option>
+            <option value={5}>5s</option>
+            <option value={10}>10s</option>
+          </select>
+          <span style={{marginLeft:12,fontSize:13}}>范围</span>
           <select value={timeRange} onChange={e => setTimeRange(e.target.value)}>
             <option value="15m">15分钟</option>
             <option value="1h">1小时</option>

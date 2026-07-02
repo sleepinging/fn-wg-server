@@ -31946,6 +31946,7 @@ const Dashboard = ({ onViewUser }) => {
   const [stats, setStats] = reactExports.useState(null);
   const [users, setUsers] = reactExports.useState([]);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
+  const [intervalSec, setIntervalSec] = reactExports.useState(3);
   const [dbStats, setDbStats] = reactExports.useState(null);
   const chartBuf = reactExports.useRef([]);
   const firstLoad = reactExports.useRef(true);
@@ -31995,9 +31996,9 @@ const Dashboard = ({ onViewUser }) => {
     firstLoad.current = true;
     chartBuf.current = [];
     loadData();
-    const timer = setInterval(loadData, 1e3);
+    const timer = setInterval(loadData, intervalSec * 1e3);
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, [loadData, intervalSec]);
   const formatBytes2 = (bytes) => {
     if (bytes === 0) return "0 B";
     const k2 = 1024;
@@ -32049,6 +32050,14 @@ const Dashboard = ({ onViewUser }) => {
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "chart-section", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "section-header", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: "总带宽使用" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 8, fontSize: 13 }, children: "刷新" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: intervalSec, onChange: (e3) => setIntervalSec(Number(e3.target.value)), style: { marginLeft: 4 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "1s" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 3, children: "3s" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 5, children: "5s" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 10, children: "10s" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 12, fontSize: 13 }, children: "范围" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: timeRange, onChange: (e3) => setTimeRange(e3.target.value), children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "15m", children: "15分钟" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "1h", children: "1小时" }),
@@ -32370,6 +32379,7 @@ const UserDetail = ({ userId, onBack }) => {
   const [stats, setStats] = reactExports.useState(null);
   const [traffic, setTraffic] = reactExports.useState(null);
   const [timeRange, setTimeRange] = reactExports.useState("1h");
+  const [intervalSec, setIntervalSec] = reactExports.useState(3);
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
   const chartBuf = reactExports.useRef([]);
@@ -32418,9 +32428,9 @@ const UserDetail = ({ userId, onBack }) => {
     firstLoad.current = true;
     chartBuf.current = [];
     loadData();
-    const timer = setInterval(loadData, 1e3);
+    const timer = setInterval(loadData, intervalSec * 1e3);
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, [loadData, intervalSec]);
   const formatBytes2 = (bytes) => {
     if (!bytes) return "0 B";
     const k2 = 1024;
@@ -32544,6 +32554,14 @@ const UserDetail = ({ userId, onBack }) => {
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "chart-section", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "section-header", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: "带宽使用" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 13 }, children: "刷新" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: intervalSec, onChange: (e3) => setIntervalSec(Number(e3.target.value)), style: { marginLeft: 4 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "1s" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 3, children: "3s" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 5, children: "5s" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 10, children: "10s" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 12, fontSize: 13 }, children: "范围" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "total-traffic", children: [
           "总下载: ",
           formatBytes2((traffic == null ? void 0 : traffic.totalRx) || 0),
