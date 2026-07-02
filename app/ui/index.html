@@ -31967,7 +31967,7 @@ const Dashboard = ({ onViewUser }) => {
         firstLoad.current = false;
         const pts = await getStatsHistory(0, getStartTime$1(timeRange), 0);
         if ((pts == null ? void 0 : pts.length) > 0) {
-          chartBuf.current = pts.map((p2) => ({ ...p2 }));
+          chartBuf.current = pts.map((p2) => ({ ...p2 })).slice(-100);
         }
       } else {
         const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
@@ -31981,8 +31981,8 @@ const Dashboard = ({ onViewUser }) => {
                 seen.add(p2.ts);
               }
             }
-            if (chartBuf.current.length > 200) {
-              chartBuf.current.splice(0, chartBuf.current.length - 200);
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100);
             }
           }
         }
@@ -32388,7 +32388,7 @@ const UserDetail = ({ userId, onBack }) => {
         const t2 = await getUserTraffic(userId, getStartTime(timeRange), 0);
         setTraffic(t2);
         if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
-          chartBuf.current = t2.chart.map((p2) => ({ ...p2 }));
+          chartBuf.current = t2.chart.map((p2) => ({ ...p2 })).slice(-100);
           setRenderKey((v2) => v2 + 1);
         }
       } else {
@@ -32403,8 +32403,8 @@ const UserDetail = ({ userId, onBack }) => {
                 seen.add(p2.ts);
               }
             }
-            if (chartBuf.current.length > 200) {
-              chartBuf.current = chartBuf.current.slice(-200);
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100);
             }
             setRenderKey((v2) => v2 + 1);
           }

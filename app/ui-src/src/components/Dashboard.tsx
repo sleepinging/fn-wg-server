@@ -34,7 +34,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
         firstLoad.current = false
         const pts = await getStatsHistory(0, getStartTime(timeRange), 0)
         if (pts?.length > 0) {
-          chartBuf.current = pts.map(p => ({ ...p }))
+          chartBuf.current = pts.map(p => ({ ...p })).slice(-100)
         }
       } else {
         const latest = chartBuf.current.length > 0
@@ -50,8 +50,8 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
                 seen.add(p.ts)
               }
             }
-            if (chartBuf.current.length > 200) {
-              chartBuf.current.splice(0, chartBuf.current.length - 200)
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100)
             }
           }
         }

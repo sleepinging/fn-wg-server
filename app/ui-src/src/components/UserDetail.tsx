@@ -32,7 +32,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         const t = await getUserTraffic(userId, getStartTime(timeRange), 0)
         setTraffic(t)
         if (t?.chart?.length > 0) {
-          chartBuf.current = t.chart.map((p: any) => ({ ...p }))
+          chartBuf.current = t.chart.map((p: any) => ({ ...p })).slice(-100)
           setRenderKey(v => v + 1)
         }
       } else {
@@ -49,8 +49,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
                 seen.add(p.ts)
               }
             }
-            if (chartBuf.current.length > 200) {
-              chartBuf.current = chartBuf.current.slice(-200)
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100)
             }
             setRenderKey(v => v + 1)
           }
