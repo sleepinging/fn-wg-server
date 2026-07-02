@@ -179,10 +179,13 @@ func GetLatestBufferedPoint(userID int) *BandwidthPoint {
 	writeMu.Lock()
 	defer writeMu.Unlock()
 	var latest *BandwidthPoint
-	for _, p := range pointBuf {
+	dbTs := getDBTimestamp()
+	for i, p := range pointBuf {
 		if p.UserID == userID || (userID == 0 && p.UserID == 0) {
+			// 倒推时间戳，避免用 Go 的错钟
+			ts := dbTs - int64(len(pointBuf)-1-i)*1000
 			if latest == nil || p.GoTs > latest.Ts {
-				latest = &BandwidthPoint{Ts: p.GoTs, RxBytes: p.RxBytes, TxBytes: p.TxBytes, RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed}
+				latest = &BandwidthPoint{Ts: ts, RxBytes: p.RxBytes, TxBytes: p.TxBytes, RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed}
 			}
 		}
 	}

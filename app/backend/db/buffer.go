@@ -216,15 +216,27 @@ func GetBufferedPointsAfter(userID int, sinceMs int64) []BandwidthPoint {
 	writeMu.Lock()
 	defer writeMu.Unlock()
 	var result []BandwidthPoint
-	for _, p := range pointBuf {
+	// 用 SQLite 时间作为 buffer 点的时间戳（Go 的时钟不可靠）
+	dbTs := getDBTimestamp()
+	for i, p := range pointBuf {
 		if (userID == 0 || p.UserID == userID) && p.GoTs > sinceMs {
+			// 倒推时间：最新的 buffer 点 = dbTs，之前每个点 -1 秒
+			ts := dbTs - int64(len(pointBuf)-1-i)*1000
 			result = append(result, BandwidthPoint{
-				Ts: p.GoTs, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
+				Ts: ts, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
 				RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed,
 			})
 		}
 	}
 	return result
+}
+
+func getDBTimestamp() int64 {
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+	var ts int64
+	db.QueryRow("SELECT CAST(strftime('%s','now') AS INTEGER) * 1000").Scan(&ts)
+	return ts
 }
 
 // GetConfigFlushInterval 获取缓存刷新间隔（秒）
