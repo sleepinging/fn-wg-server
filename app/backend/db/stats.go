@@ -153,8 +153,13 @@ func CountBandwidthAfter(userID int, sinceMs int64) (int64, error) {
 	return count, nil
 }
 
-// GetLatestBandwidth gets the latest bandwidth point (DB + buffer).
+// GetLatestBandwidth gets the latest bandwidth point (buffer first, then DB).
 func GetLatestBandwidth(userID int) (*BandwidthPoint, error) {
+	// Buffer always has freshest data (within last 10s)
+	if bufLatest := GetLatestBufferedPoint(userID); bufLatest != nil {
+		return bufLatest, nil
+	}
+
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 
@@ -163,14 +168,6 @@ func GetLatestBandwidth(userID int) (*BandwidthPoint, error) {
 		FROM bandwidth_history WHERE user_id = ?
 		ORDER BY ts DESC LIMIT 1`, userID).
 		Scan(&p.Ts, &p.RxBytes, &p.TxBytes, &p.RxSpeed, &p.TxSpeed)
-
-	bufLatest := GetLatestBufferedPoint(userID)
-	if bufLatest != nil {
-		if err != nil || bufLatest.Ts >= p.Ts {
-			return bufLatest, nil
-		}
-	}
-
 	if err != nil {
 		return nil, err
 	}
