@@ -54,14 +54,26 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
           const t = await getUserTraffic(userId, latest, 0)
           if (t?.chart?.length > 0) {
             const seen = new Set(chartBuf.current.map((p: any) => p.ts))
+            let newCount = 0
             for (const p of t.chart) {
               if (!seen.has(p.ts)) {
                 chartBuf.current.push(p)
                 seen.add(p.ts)
+                newCount++
               }
             }
-            // 新增N个点就丢弃最旧的N个，保持窗口稳定
-            chartBuf.current = chartBuf.current.slice(-100)
+            // 累积后重采样到100个均匀点
+            if (chartBuf.current.length > 100 && newCount > 0) {
+              if (chartBuf.current.length > 100) {
+                const step = (chartBuf.current.length - 1) / 99
+                const resampled = []
+                for (let i = 0; i < 100; i++) {
+                  const idx = Math.round(i * step)
+                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)])
+                }
+                chartBuf.current = resampled
+              }
+            }
           }
         }
         setDomain([Date.now() - getRangeMs(timeRange), Date.now()])

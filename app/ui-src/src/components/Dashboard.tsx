@@ -57,14 +57,27 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
           const pts = await getStatsHistory(0, latest, 0)
           if (pts?.length > 0) {
             const seen = new Set(chartBuf.current.map(p => p.ts))
+            let newCount = 0
             for (const p of pts) {
               if (!seen.has(p.ts)) {
                 chartBuf.current.push(p)
                 seen.add(p.ts)
+                newCount++
               }
             }
-            // 新增N个点就丢弃最旧的N个，保持100点窗口稳定
-            chartBuf.current = chartBuf.current.slice(-100)
+            // 累积后重采样到100个均匀点，保持跨距不超限
+            if (chartBuf.current.length > 100 && newCount > 0) {
+              const timeSpan = chartBuf.current[chartBuf.current.length - 1].ts - chartBuf.current[0].ts
+              if (chartBuf.current.length > 100) {
+                const step = (chartBuf.current.length - 1) / 99  // 100个点=99段
+                const resampled = []
+                for (let i = 0; i < 100; i++) {
+                  const idx = Math.round(i * step)
+                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)])
+                }
+                chartBuf.current = resampled
+              }
+            }
           }
         }
         // domain 始终按用户选择的时间范围

@@ -91009,13 +91009,26 @@ const Dashboard = ({ onViewUser }) => {
           const pts = await getStatsHistory(0, latest, 0);
           if ((pts == null ? void 0 : pts.length) > 0) {
             const seen = new Set(chartBuf.current.map((p2) => p2.ts));
+            let newCount = 0;
             for (const p2 of pts) {
               if (!seen.has(p2.ts)) {
                 chartBuf.current.push(p2);
                 seen.add(p2.ts);
+                newCount++;
               }
             }
-            chartBuf.current = chartBuf.current.slice(-100);
+            if (chartBuf.current.length > 100 && newCount > 0) {
+              const timeSpan = chartBuf.current[chartBuf.current.length - 1].ts - chartBuf.current[0].ts;
+              if (chartBuf.current.length > 100) {
+                const step = (chartBuf.current.length - 1) / 99;
+                const resampled = [];
+                for (let i = 0; i < 100; i++) {
+                  const idx = Math.round(i * step);
+                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)]);
+                }
+                chartBuf.current = resampled;
+              }
+            }
           }
         }
         setDomain([Date.now() - getRangeMs$1(timeRange), Date.now()]);
@@ -91463,13 +91476,25 @@ const UserDetail = ({ userId, onBack }) => {
           const t2 = await getUserTraffic(userId, latest, 0);
           if (((_b3 = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b3.length) > 0) {
             const seen = new Set(chartBuf.current.map((p2) => p2.ts));
+            let newCount = 0;
             for (const p2 of t2.chart) {
               if (!seen.has(p2.ts)) {
                 chartBuf.current.push(p2);
                 seen.add(p2.ts);
+                newCount++;
               }
             }
-            chartBuf.current = chartBuf.current.slice(-100);
+            if (chartBuf.current.length > 100 && newCount > 0) {
+              if (chartBuf.current.length > 100) {
+                const step = (chartBuf.current.length - 1) / 99;
+                const resampled = [];
+                for (let i = 0; i < 100; i++) {
+                  const idx = Math.round(i * step);
+                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)]);
+                }
+                chartBuf.current = resampled;
+              }
+            }
           }
         }
         setDomain([Date.now() - getRangeMs(timeRange), Date.now()]);

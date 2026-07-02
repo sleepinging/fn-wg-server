@@ -110,15 +110,13 @@ function shiftTs(arr) {
 // since>0 时生成随机新数据（模拟每秒新增）
 function filterHistory(fixtures, sinceMs, maxPoints) {
   const nowMs = now()
-  let label = '1h'
-  if (sinceMs >= nowMs - 900_000) label = '15m'
-  else if (sinceMs >= nowMs - 3_600_000) label = '1h'
-  else label = '6h'
+  const limit = maxPoints || 100
 
-  if (sinceMs > 0 && sinceMs < nowMs - 1000) {
-    // 增量查询：生成 sinceMs+1s ~ nowMs 之间的随机数据点
+  // 增量查询: sinceMs 距 nowMs < 10s
+  if (sinceMs > 0 && nowMs - sinceMs < 10000) {
+    // 增量查询：1s密度，模拟生产实时数据
     const pts = []
-    let ts = sinceMs + 1000  // 从 since+1s 开始
+    let ts = sinceMs + 1000
     while (ts <= nowMs) {
       pts.push({
         ts: ts,
@@ -127,21 +125,28 @@ function filterHistory(fixtures, sinceMs, maxPoints) {
         rxBytes: Math.floor(Math.random() * 10000000),
         txBytes: Math.floor(Math.random() * 5000000),
       })
-      ts += 1000  // 1秒间隔
+      ts += 1000
     }
-    return pts.slice(-(maxPoints || 100))
+    return pts.slice(-limit)
   }
 
-  // 初始查询：从 fixture 返回
-  let data = shiftTs(fixtures[label] || fixtures['1h'] || [])
-  if (sinceMs > 0) {
-    data = data.filter(p => p.ts > sinceMs)
+  // 初始查询：生成sinceMs ~ nowMs全量后采样100点
+  const startMs = sinceMs > 0 ? sinceMs : nowMs - 3600000
+  const full = []
+  let ts = startMs
+  while (ts <= nowMs) {
+    full.push({
+      ts: ts,
+      rxSpeed: Math.random() < 0.2 ? Math.floor(Math.random() * 500000) : 0,
+      txSpeed: Math.random() < 0.15 ? Math.floor(Math.random() * 200000) : 0,
+      rxBytes: Math.floor(Math.random() * 10000000),
+      txBytes: Math.floor(Math.random() * 5000000),
+    })
+    ts += 1000
   }
-  if (maxPoints > 0 && data.length > maxPoints) {
-    const step = Math.floor(data.length / maxPoints) || 1
-    data = data.filter((_, i) => i % step === 0 || i === data.length - 1).slice(-maxPoints)
-  }
-  return data
+  // 采样——模拟生产后端聚合查询
+  const step = Math.floor(full.length / limit) || 1
+  return full.filter((_, i) => i % step === 0).slice(-limit)
 }
 
 // ========== API 路由 ==========
