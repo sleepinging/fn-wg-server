@@ -41,6 +41,10 @@ const BandwidthChart: React.FC<BandwidthChartProps> = ({
       left: 'center',
       textStyle: { fontSize: 13 },
       selectedMode: true,
+      selected: {
+        '下载': hidden['下载'] === undefined ? true : hidden['下载'],
+        '上传': hidden['上传'] === undefined ? true : hidden['上传'],
+      },
     },
     xAxis: {
       type: 'time',
@@ -93,7 +97,7 @@ const BandwidthChart: React.FC<BandwidthChartProps> = ({
         data: chartData.map(p => [p.ts, p[line2Key] ?? 0]),
       },
     ],
-  }), [chartData, domain, line1Key, line2Key, formatSpeed])
+  }), [chartData, domain, line1Key, line2Key, formatSpeed, hidden])
 
   return (
     <div className="chart-section">
@@ -129,9 +133,9 @@ const BandwidthChart: React.FC<BandwidthChartProps> = ({
         <ReactECharts
           option={option}
           style={{ height: '100%', width: '100%' }}
+          notMerge
           opts={{ renderer: 'svg' }}
           onChartReady={onChartReady}
-          notMerge={false}
         />
       </div>
     </div>

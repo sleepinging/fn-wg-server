@@ -90862,7 +90862,11 @@ const BandwidthChart = ({
       top: 8,
       left: "center",
       textStyle: { fontSize: 13 },
-      selectedMode: true
+      selectedMode: true,
+      selected: {
+        "下载": hidden["下载"] === void 0 ? true : hidden["下载"],
+        "上传": hidden["上传"] === void 0 ? true : hidden["上传"]
+      }
     },
     xAxis: {
       type: "time",
@@ -90915,7 +90919,7 @@ const BandwidthChart = ({
         data: chartData.map((p2) => [p2.ts, p2[line2Key] ?? 0])
       }
     ]
-  }), [chartData, domain, line1Key, line2Key, formatSpeed]);
+  }), [chartData, domain, line1Key, line2Key, formatSpeed, hidden]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "chart-section", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "section-header", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: title }),
@@ -90952,9 +90956,9 @@ const BandwidthChart = ({
         {
           option,
           style: { height: "100%", width: "100%" },
+          notMerge: true,
           opts: { renderer: "svg" },
-          onChartReady,
-          notMerge: false
+          onChartReady
         }
       )
     ] })
@@ -91011,9 +91015,7 @@ const Dashboard = ({ onViewUser }) => {
                 seen.add(p2.ts);
               }
             }
-            if (chartBuf.current.length > 100) {
-              chartBuf.current = chartBuf.current.slice(-100);
-            }
+            chartBuf.current = chartBuf.current.slice(-100);
           }
         }
         setDomain([Date.now() - getRangeMs$1(timeRange), Date.now()]);
@@ -91467,9 +91469,7 @@ const UserDetail = ({ userId, onBack }) => {
                 seen.add(p2.ts);
               }
             }
-            if (chartBuf.current.length > 100) {
-              chartBuf.current = chartBuf.current.slice(-100);
-            }
+            chartBuf.current = chartBuf.current.slice(-100);
           }
         }
         setDomain([Date.now() - getRangeMs(timeRange), Date.now()]);

@@ -60,9 +60,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
                 seen.add(p.ts)
               }
             }
-            if (chartBuf.current.length > 100) {
-              chartBuf.current = chartBuf.current.slice(-100)
-            }
+            // 新增N个点就丢弃最旧的N个，保持窗口稳定
+            chartBuf.current = chartBuf.current.slice(-100)
           }
         }
         setDomain([Date.now() - getRangeMs(timeRange), Date.now()])

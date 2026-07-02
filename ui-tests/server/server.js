@@ -106,21 +106,37 @@ function shiftTs(arr) {
 }
 
 // ========== 时间范围匹配 ==========
-// 根据 since 参数选择合适的 fixture (15m/1h/6h)，并过滤 ts > since
+// since=0 时从 fixture 返回采样数据
+// since>0 时生成随机新数据（模拟每秒新增）
 function filterHistory(fixtures, sinceMs, maxPoints) {
-  // 选最接近的 fixture
   const nowMs = now()
   let label = '1h'
   if (sinceMs >= nowMs - 900_000) label = '15m'
   else if (sinceMs >= nowMs - 3_600_000) label = '1h'
   else label = '6h'
 
+  if (sinceMs > 0 && sinceMs < nowMs - 1000) {
+    // 增量查询：生成 sinceMs+1s ~ nowMs 之间的随机数据点
+    const pts = []
+    let ts = sinceMs + 1000  // 从 since+1s 开始
+    while (ts <= nowMs) {
+      pts.push({
+        ts: ts,
+        rxSpeed: Math.random() < 0.2 ? Math.floor(Math.random() * 500000) : 0,
+        txSpeed: Math.random() < 0.15 ? Math.floor(Math.random() * 200000) : 0,
+        rxBytes: Math.floor(Math.random() * 10000000),
+        txBytes: Math.floor(Math.random() * 5000000),
+      })
+      ts += 1000  // 1秒间隔
+    }
+    return pts.slice(-(maxPoints || 100))
+  }
+
+  // 初始查询：从 fixture 返回
   let data = shiftTs(fixtures[label] || fixtures['1h'] || [])
-  // 过滤 ts > sinceMs
   if (sinceMs > 0) {
     data = data.filter(p => p.ts > sinceMs)
   }
-  // 限制点数 (采样)
   if (maxPoints > 0 && data.length > maxPoints) {
     const step = Math.floor(data.length / maxPoints) || 1
     data = data.filter((_, i) => i % step === 0 || i === data.length - 1).slice(-maxPoints)
