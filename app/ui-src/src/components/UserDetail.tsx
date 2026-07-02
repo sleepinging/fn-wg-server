@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getUser, getUserStats, getUserTraffic, getUserConfig, User } from '../api'
 import HistoryTable from './HistoryTable'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import BandwidthChart from './BandwidthChart'
 import DebugBar from './DebugBar'
 
 interface Props {
@@ -17,8 +17,9 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [intervalSec, setIntervalSec] = useState(3)
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
+  const [chartLoading, setChartLoading] = useState(false)
   const chartBuf = useRef<any[]>([])
-  const domainRef = useRef<[number,number]>([Date.now() - 3600000, Date.now()])
+  const [domain, setDomain] = useState<[number,number]>([Date.now() - 3600000, Date.now()])
   const firstLoad = useRef(true)
 
   const loadData = useCallback(async () => {
@@ -27,22 +28,24 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         getUser(userId),
         getUserStats(userId),
       ])
-      setUser(u)
-      setStats(s)
 
       if (firstLoad.current) {
         firstLoad.current = false
         const startMs = getStartTime(timeRange)
-        const t = await getUserTraffic(userId, startMs, 0)
-        setTraffic(t)
-        if (t?.chart?.length > 0) {
-          chartBuf.current = padTimeRange(t.chart, startMs)
+        setChartLoading(true)
+        try {
+          const t = await getUserTraffic(userId, startMs, 0)
+          setTraffic(t)
+          if (t?.chart?.length > 0) {
+            chartBuf.current = padTimeRange(t.chart, startMs)
+          }
+          if (chartBuf.current.length === 0) {
+            chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
+          }
+          setDomain([startMs, Date.now()])
+        } finally {
+          setChartLoading(false)
         }
-        if (chartBuf.current.length === 0) {
-          chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
-        }
-        domainRef.current = [startMs, Date.now()]
-        setRenderKey(v => v + 1)
       } else {
         const latest = chartBuf.current.length > 0
           ? chartBuf.current[chartBuf.current.length - 1].ts
@@ -60,10 +63,13 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
             if (chartBuf.current.length > 100) {
               chartBuf.current = chartBuf.current.slice(-100)
             }
-            setRenderKey(v => v + 1)
           }
         }
+        setDomain([Date.now() - getRangeMs(timeRange), Date.now()])
       }
+      // state 更新放在 chartBuf 之后，确保渲染时数据已最新
+      setUser(u)
+      setStats(s)
     } catch (e) {
       console.error('Failed to load user detail', e)
     }
@@ -72,7 +78,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   useEffect(() => {
     firstLoad.current = true
     chartBuf.current = []
-    loadData()
+    setChartLoading(true)
+    loadData().finally(() => setChartLoading(false))
     const timer = setInterval(loadData, intervalSec * 1000)
     return () => clearInterval(timer)
   }, [loadData, intervalSec])
@@ -205,39 +212,26 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         </div>
       </div>
 
-      <div className="chart-section">
-        <div className="section-header">
-          <h3>带宽使用</h3>
-          <span style={{fontSize:13}}>刷新</span>
-          <select value={intervalSec} onChange={e => setIntervalSec(Number(e.target.value))} style={{marginLeft:4}}>
-            <option value={1}>1s</option>
-            <option value={3}>3s</option>
-            <option value={5}>5s</option>
-            <option value={10}>10s</option>
-          </select>
-          <span style={{marginLeft:12,fontSize:13}}>范围</span>
+      <BandwidthChart
+        title="带宽使用"
+        chartData={chartData}
+        domain={domain}
+        loading={chartLoading}
+        height={250}
+        intervalSec={intervalSec}
+        timeRange={timeRange}
+        onIntervalChange={setIntervalSec}
+        onTimeRangeChange={setTimeRange}
+        line1Key="rxSpeed"
+        line2Key="txSpeed"
+        formatSpeed={formatSpeed}
+        renderKey={renderKey}
+        extraContent={
           <div className="total-traffic">
             总下载: {formatBytes(traffic?.totalRx || 0)} | 总上传: {formatBytes(traffic?.totalTx || 0)}
           </div>
-          <select value={timeRange} onChange={e => setTimeRange(e.target.value)}>
-            <option value="15m">15分钟</option>
-            <option value="1h">1小时</option>
-            <option value="6h">6小时</option>
-            <option value="24h">24小时</option>
-            <option value="7d">7天</option>
-          </select>
-        </div>
-        <ResponsiveContainer width="100%" height={250} key={renderKey}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis dataKey="ts" type="number" domain={domainRef.current} tickFormatter={(v: number) => new Date(v).toLocaleTimeString()} fontSize={12} />
-            <YAxis fontSize={12} tickFormatter={v => formatSpeed(v)} />
-            <Tooltip formatter={(value: number) => [formatSpeed(value), '']} />
-            <Line type="monotone" dataKey="rxSpeed" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} isAnimationActive={false} />
-            <Line type="monotone" dataKey="txSpeed" stroke="#FF9800" strokeWidth={2} name="上传" dot={false} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+        }
+      />
 
       <div className="history-section">
         <h3>历史记录</h3>
@@ -290,8 +284,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         dataPoints={chartBuf.current.length}
         firstTs={chartBuf.current[0]?.ts || 0}
         lastTs={chartBuf.current[chartBuf.current.length - 1]?.ts || 0}
-        domainStart={domainRef.current[0]}
-        domainEnd={domainRef.current[1]}
+        domainStart={domain[0]}
+        domainEnd={domain[1]}
       />
     </div>
   )
@@ -306,16 +300,20 @@ function padTimeRange(pts: any[], startMs: number): any[] {
   return pts.slice(-100)
 }
 
+function getRangeMs(range: string): number {
+  switch (range) {
+    case '15m': return 15 * 60000
+    case '1h': return 60 * 60000
+    case '6h': return 360 * 60000
+    case '24h': return 1440 * 60000
+    case '7d': return 7 * 86400000
+    default: return 60 * 60000
+  }
+}
+
 function getStartTime(range: string): number {
   const now = Date.now()
-  switch (range) {
-    case '15m': return now - 15 * 60000
-    case '1h': return now - 60 * 60000
-    case '6h': return now - 360 * 60000
-    case '24h': return now - 1440 * 60000
-    case '7d': return now - 7 * 86400000
-    default: return now - 60 * 60000
-  }
+  return now - getRangeMs(range)
 }
 
 export default UserDetail

@@ -13,8 +13,8 @@ const HistoryTable: React.FC<{ uid: number }> = ({ uid }) => {
   const loadHistory = async () => {
     try {
       const data = await api.getUserHistory(uid, page, 20)
-      setHistory(data.data)
-      setTotal(data.total)
+      setHistory(data.history || data.data || [])
+      setTotal(data.total || 0)
     } catch (e) {
       console.error('Failed to load history', e)
     }
@@ -44,7 +44,7 @@ const HistoryTable: React.FC<{ uid: number }> = ({ uid }) => {
               <td>{formatBytesSimple(h.txBytes)}</td>
             </tr>
           ))}
-          {history.length === 0 && (
+          {(history || []).length === 0 && (
             <tr><td colSpan={6} className="empty">暂无历史记录</td></tr>
           )}
         </tbody>

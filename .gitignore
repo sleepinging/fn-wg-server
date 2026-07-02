@@ -22,3 +22,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Test artifacts
+ui-tests/screenshots/
+ui-tests/tests/test-results/
+ui-tests/temp/
+ui-tests/server/node_modules/
+ui-tests/tests/node_modules/
+

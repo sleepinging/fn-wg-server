@@ -204,8 +204,8 @@ for f in app.tgz manifest cmd config; do
   [ -e "$P/$f" ] || err "校验失败：缺 $f"
 done
 
-# 清理旧的 fpk 文件（只保留最近 5 个）
-OLD_FPKS=$(ls -t "$ROOT"/*.fpk 2>/dev/null | tail -n +6)
+# 清理旧的 fpk 文件（只保留最近 2 个）
+OLD_FPKS=$(ls -t "$ROOT"/*.fpk 2>/dev/null | tail -n +3)
 if [ -n "$OLD_FPKS" ]; then
     info "清理旧 fpk 文件..."
     rm -f $OLD_FPKS
