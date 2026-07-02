@@ -31949,6 +31949,7 @@ const Dashboard = ({ onViewUser }) => {
   const [intervalSec, setIntervalSec] = reactExports.useState(3);
   const [dbStats, setDbStats] = reactExports.useState(null);
   const chartBuf = reactExports.useRef([]);
+  const domainRef = reactExports.useRef([Date.now() - 36e5, Date.now()]);
   const firstLoad = reactExports.useRef(true);
   const dbLastFetch = reactExports.useRef(0);
   const loadData = reactExports.useCallback(async () => {
@@ -31974,6 +31975,7 @@ const Dashboard = ({ onViewUser }) => {
         if (chartBuf.current.length === 0) {
           chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }];
         }
+        domainRef.current = [startMs, Date.now()];
       } else {
         const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
         if (latest > 0) {
@@ -32023,8 +32025,6 @@ const Dashboard = ({ onViewUser }) => {
     rx: p2.rxSpeed || 0,
     tx: p2.txSpeed || 0
   }));
-  const domainStart = chartData.length > 0 ? chartData[0].ts : 0;
-  const domainEnd = chartData.length > 0 ? chartData[chartData.length - 1].ts : 0;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "dashboard", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stats-grid", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
@@ -32075,7 +32075,7 @@ const Dashboard = ({ onViewUser }) => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ResponsiveContainer, { width: "100%", height: 300, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(LineChart, { data: chartData, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CartesianGrid, { strokeDasharray: "3 3", stroke: "#e0e0e0" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "ts", type: "number", domain: [domainStart, domainEnd], tickFormatter: (v2) => new Date(v2).toLocaleTimeString(), fontSize: 12 }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "ts", type: "number", domain: domainRef.current, tickFormatter: (v2) => new Date(v2).toLocaleTimeString(), fontSize: 12 }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(YAxis, { fontSize: 12, tickFormatter: (v2) => formatSpeed(v2) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { formatter: (value) => [formatSpeed(value), ""] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rx", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false, isAnimationActive: false }),
@@ -32398,6 +32398,7 @@ const UserDetail = ({ userId, onBack }) => {
   const [showExportModal, setShowExportModal] = reactExports.useState(false);
   const [exportConfig, setExportConfig] = reactExports.useState(null);
   const chartBuf = reactExports.useRef([]);
+  const domainRef = reactExports.useRef([Date.now() - 36e5, Date.now()]);
   const firstLoad = reactExports.useRef(true);
   const loadData = reactExports.useCallback(async () => {
     var _a, _b;
@@ -32419,6 +32420,7 @@ const UserDetail = ({ userId, onBack }) => {
         if (chartBuf.current.length === 0) {
           chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }];
         }
+        domainRef.current = [startMs, Date.now()];
         setRenderKey((v2) => v2 + 1);
       } else {
         const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
@@ -32473,8 +32475,6 @@ const UserDetail = ({ userId, onBack }) => {
     rxBytes: p2.rxBytes || 0,
     txBytes: p2.txBytes || 0
   }));
-  const domainStart = chartData.length > 0 ? chartData[0].ts : 0;
-  const domainEnd = chartData.length > 0 ? chartData[chartData.length - 1].ts : 0;
   const handleExportConfig = async () => {
     try {
       const data = await getUserConfig(userId);
@@ -32600,7 +32600,7 @@ const UserDetail = ({ userId, onBack }) => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ResponsiveContainer, { width: "100%", height: 250, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(LineChart, { data: chartData, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CartesianGrid, { strokeDasharray: "3 3", stroke: "#e0e0e0" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "ts", type: "number", domain: [domainStart, domainEnd], tickFormatter: (v2) => new Date(v2).toLocaleTimeString(), fontSize: 12 }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(XAxis, { dataKey: "ts", type: "number", domain: domainRef.current, tickFormatter: (v2) => new Date(v2).toLocaleTimeString(), fontSize: 12 }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(YAxis, { fontSize: 12, tickFormatter: (v2) => formatSpeed(v2) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { formatter: (value) => [formatSpeed(value), ""] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Line, { type: "monotone", dataKey: "rxSpeed", stroke: "#2196F3", strokeWidth: 2, name: "下载", dot: false, isAnimationActive: false }),

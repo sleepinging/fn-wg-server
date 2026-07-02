@@ -17,6 +17,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfig, setExportConfig] = useState<any>(null)
   const chartBuf = useRef<any[]>([])
+  const domainRef = useRef<[number,number]>([Date.now() - 3600000, Date.now()])
   const firstLoad = useRef(true)
 
   const loadData = useCallback(async () => {
@@ -39,6 +40,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         if (chartBuf.current.length === 0) {
           chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
         }
+        domainRef.current = [startMs, Date.now()]
         setRenderKey(v => v + 1)
       } else {
         const latest = chartBuf.current.length > 0
@@ -100,9 +102,6 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     rxBytes: p.rxBytes || 0,
     txBytes: p.txBytes || 0,
   }))
-
-  const domainStart = chartData.length > 0 ? chartData[0].ts : 0
-  const domainEnd = chartData.length > 0 ? chartData[chartData.length - 1].ts : 0
 
   const handleExportConfig = async () => {
     try {
@@ -230,7 +229,7 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         <ResponsiveContainer width="100%" height={250} key={renderKey}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis dataKey="ts" type="number" domain={[domainStart, domainEnd]} tickFormatter={(v: number) => new Date(v).toLocaleTimeString()} fontSize={12} />
+            <XAxis dataKey="ts" type="number" domain={domainRef.current} tickFormatter={(v: number) => new Date(v).toLocaleTimeString()} fontSize={12} />
             <YAxis fontSize={12} tickFormatter={v => formatSpeed(v)} />
             <Tooltip formatter={(value: number) => [formatSpeed(value), '']} />
             <Line type="monotone" dataKey="rxSpeed" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} isAnimationActive={false} />

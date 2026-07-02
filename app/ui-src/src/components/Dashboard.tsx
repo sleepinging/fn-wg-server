@@ -13,6 +13,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [intervalSec, setIntervalSec] = useState(3)
   const [dbStats, setDbStats] = useState<any>(null)
   const chartBuf = useRef<any[]>([])
+  const domainRef = useRef<[number,number]>([Date.now() - 3600000, Date.now()])
   const firstLoad = useRef(true)
   const dbLastFetch = useRef(0)
 
@@ -42,6 +43,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
         if (chartBuf.current.length === 0) {
           chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
         }
+        domainRef.current = [startMs, Date.now()]
       } else {
         const latest = chartBuf.current.length > 0
           ? chartBuf.current[chartBuf.current.length - 1].ts
@@ -98,10 +100,6 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
     tx: p.txSpeed || 0,
   }))
 
-  // 计算 X 轴时间范围，确保始终填满选择的时间窗口
-  const domainStart = chartData.length > 0 ? chartData[0].ts : 0
-  const domainEnd = chartData.length > 0 ? chartData[chartData.length - 1].ts : 0
-
   return (
     <div className="dashboard">
       <div className="stats-grid">
@@ -149,7 +147,7 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis dataKey="ts" type="number" domain={[domainStart, domainEnd]} tickFormatter={(v: number) => new Date(v).toLocaleTimeString()} fontSize={12} />
+            <XAxis dataKey="ts" type="number" domain={domainRef.current} tickFormatter={(v: number) => new Date(v).toLocaleTimeString()} fontSize={12} />
             <YAxis fontSize={12} tickFormatter={v => formatSpeed(v)} />
             <Tooltip formatter={(value: number) => [formatSpeed(value), '']} />
             <Line type="monotone" dataKey="rx" stroke="#2196F3" strokeWidth={2} name="下载" dot={false} isAnimationActive={false} />
