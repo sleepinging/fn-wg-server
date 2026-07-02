@@ -30,12 +30,16 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
 
       if (firstLoad.current) {
         firstLoad.current = false
-        const t = await getUserTraffic(userId, getStartTime(timeRange), 0)
+        const startMs = getStartTime(timeRange)
+        const t = await getUserTraffic(userId, startMs, 0)
         setTraffic(t)
         if (t?.chart?.length > 0) {
-          chartBuf.current = t.chart.map((p: any) => ({ ...p })).slice(-100)
-          setRenderKey(v => v + 1)
+          chartBuf.current = padTimeRange(t.chart, startMs)
         }
+        if (chartBuf.current.length === 0) {
+          chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
+        }
+        setRenderKey(v => v + 1)
       } else {
         const latest = chartBuf.current.length > 0
           ? chartBuf.current[chartBuf.current.length - 1].ts
@@ -280,6 +284,15 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
       )}
     </div>
   )
+}
+
+function padTimeRange(pts: any[], startMs: number): any[] {
+  if (pts.length === 0) return pts
+  const gap = pts[0].ts - startMs
+  if (gap > 30000) {
+    return [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }, ...pts].slice(-100)
+  }
+  return pts.slice(-100)
 }
 
 function getStartTime(range: string): number {

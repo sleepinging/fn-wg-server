@@ -33,9 +33,14 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
 
       if (firstLoad.current) {
         firstLoad.current = false
-        const pts = await getStatsHistory(0, getStartTime(timeRange), 0)
+        const startMs = getStartTime(timeRange)
+        const pts = await getStatsHistory(0, startMs, 0)
         if (pts?.length > 0) {
-          chartBuf.current = pts.map(p => ({ ...p })).slice(-100)
+          chartBuf.current = padTimeRange(pts, startMs)
+        }
+        // 无数据时至少放一个起始锚点
+        if (chartBuf.current.length === 0) {
+          chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
         }
       } else {
         const latest = chartBuf.current.length > 0
@@ -192,6 +197,16 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
       )}
     </div>
   )
+}
+
+function padTimeRange(pts: any[], startMs: number): any[] {
+  if (pts.length === 0) return pts
+  // 若第一个点离起始时间超过 30 秒，补一个锚点让 X 轴从正确位置开始
+  const gap = pts[0].ts - startMs
+  if (gap > 30000) {
+    return [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }, ...pts].slice(-100)
+  }
+  return pts.slice(-100)
 }
 
 function getStartTime(range: string): number {

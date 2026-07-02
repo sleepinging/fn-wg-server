@@ -31966,9 +31966,13 @@ const Dashboard = ({ onViewUser }) => {
       }
       if (firstLoad.current) {
         firstLoad.current = false;
-        const pts = await getStatsHistory(0, getStartTime$1(timeRange), 0);
+        const startMs = getStartTime$1(timeRange);
+        const pts = await getStatsHistory(0, startMs, 0);
         if ((pts == null ? void 0 : pts.length) > 0) {
-          chartBuf.current = pts.map((p2) => ({ ...p2 })).slice(-100);
+          chartBuf.current = padTimeRange$1(pts, startMs);
+        }
+        if (chartBuf.current.length === 0) {
+          chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }];
         }
       } else {
         const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
@@ -32112,6 +32116,14 @@ const Dashboard = ({ onViewUser }) => {
     ] })
   ] });
 };
+function padTimeRange$1(pts, startMs) {
+  if (pts.length === 0) return pts;
+  const gap = pts[0].ts - startMs;
+  if (gap > 3e4) {
+    return [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }, ...pts].slice(-100);
+  }
+  return pts.slice(-100);
+}
 function getStartTime$1(range3) {
   const now2 = Date.now();
   switch (range3) {
@@ -32395,12 +32407,16 @@ const UserDetail = ({ userId, onBack }) => {
       setStats(s2);
       if (firstLoad.current) {
         firstLoad.current = false;
-        const t2 = await getUserTraffic(userId, getStartTime(timeRange), 0);
+        const startMs = getStartTime(timeRange);
+        const t2 = await getUserTraffic(userId, startMs, 0);
         setTraffic(t2);
         if (((_a = t2 == null ? void 0 : t2.chart) == null ? void 0 : _a.length) > 0) {
-          chartBuf.current = t2.chart.map((p2) => ({ ...p2 })).slice(-100);
-          setRenderKey((v2) => v2 + 1);
+          chartBuf.current = padTimeRange(t2.chart, startMs);
         }
+        if (chartBuf.current.length === 0) {
+          chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }];
+        }
+        setRenderKey((v2) => v2 + 1);
       } else {
         const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
         if (latest > 0) {
@@ -32634,6 +32650,14 @@ const UserDetail = ({ userId, onBack }) => {
     ] }) })
   ] });
 };
+function padTimeRange(pts, startMs) {
+  if (pts.length === 0) return pts;
+  const gap = pts[0].ts - startMs;
+  if (gap > 3e4) {
+    return [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }, ...pts].slice(-100);
+  }
+  return pts.slice(-100);
+}
 function getStartTime(range3) {
   const now2 = Date.now();
   switch (range3) {
