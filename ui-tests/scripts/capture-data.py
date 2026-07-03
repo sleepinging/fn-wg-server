@@ -1,14 +1,17 @@
 """
 从飞牛 fnOS 抓取 WireGuard API 真实数据，保存为 JSON fixtures。
 用法: python capture-data.py
-需要 SSH 连接到 your-server.example.com:22
+需要 SSH 连接到目标服务器
 """
 import paramiko, json, time, re, os, sys
 
 HOST = "your-server.example.com"
 PORT = 22
 USER = "your-user"
-PASS = "REMOVED"
+PASS = os.environ.get("SSH_PASSWORD", "")  # 从环境变量读取
+if not PASS:
+    print("请设置 SSH_PASSWORD 环境变量")
+    sys.exit(1)
 CGI = "/vol1/@appcenter/wg-server/ui/index.cgi"
 DATA_DIR = "/vol1/@appdata/wg-server"
 OUT = os.path.join(os.path.dirname(__file__), "..", "server", "fixtures")
