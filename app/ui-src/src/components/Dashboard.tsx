@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getStats, getStatsHistory, getUsers, getDBStats, GlobalStats, BandwidthPoint, User } from '../api'
 import DebugBar from './DebugBar'
 import BandwidthChart from './BandwidthChart'
+import { downsampleMax } from './downsample'
 
 interface Props {
   onViewUser: (userId: number) => void
@@ -31,11 +32,15 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
         getDBStats().then(setDbStats).catch(() => {})
       }
 
+      const rangeMs = getRangeMs(timeRange)
+      const now = Date.now()
+
       if (firstLoad.current) {
         firstLoad.current = false
-        const startMs = getStartTime(timeRange)
+        const startMs = now - rangeMs
         setChartLoading(true)
         try {
+          // 首次全量：后端聚合到 100 点
           const pts = await getStatsHistory(0, startMs, 0)
           if (pts?.length > 0) {
             chartBuf.current = padTimeRange(pts, startMs)
@@ -44,34 +49,33 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
           if (chartBuf.current.length === 0) {
             chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
           }
-          // domain 按用户选择的时间范围
-          setDomain([startMs, Date.now()])
+          setDomain([startMs, now])
         } finally {
           setChartLoading(false)
         }
       } else {
+        // 增量拉取：只取最新点之后的少量原始点
         const latest = chartBuf.current.length > 0
           ? chartBuf.current[chartBuf.current.length - 1].ts
           : 0
         if (latest > 0) {
           const pts = await getStatsHistory(0, latest, 0)
           if (pts?.length > 0) {
-            // 增量去重后立即合并，不做延迟聚合
-            const seen = new Set(chartBuf.current.map((p: any) => p.ts))
             for (const p of pts) {
-              if (!seen.has(p.ts)) {
+              if (p.ts > latest) {
                 chartBuf.current.push(p)
-                seen.add(p.ts)
               }
-            }
-            // 滑动窗口：仅保留最近 100 个点
-            if (chartBuf.current.length > 100) {
-              chartBuf.current = chartBuf.current.slice(-100)
             }
           }
         }
-        // domain 始终按用户选择的时间范围
-        setDomain([Date.now() - getRangeMs(timeRange), Date.now()])
+        // 按时间范围裁剪：丢弃超出范围的旧点，保持跨度稳定
+        const cutoff = now - rangeMs
+        chartBuf.current = chartBuf.current.filter(p => p.ts >= cutoff)
+        // 点数累积够后本地合并到 100 点（max 算法，与后端一致）
+        if (chartBuf.current.length > 120) {
+          chartBuf.current = downsampleMax(chartBuf.current, 100)
+        }
+        setDomain([now - rangeMs, now])
       }
       // state 更新放在 chartBuf 之后
       setStats(s)
@@ -173,8 +177,8 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
                 <td>{user.username}</td>
                 <td>{user.internalIP}</td>
                 <td className="ip">{user.endpoint || '-'}</td>
-                <td>{formatBytes(user.rxBytes || 0)}</td>
                 <td>{formatBytes(user.txBytes || 0)}</td>
+                <td>{formatBytes(user.rxBytes || 0)}</td>
                 <td>{user.onlineSince || '-'}</td>
                 <td>
                   <button className="btn btn-sm" onClick={() => onViewUser(user.id)}>

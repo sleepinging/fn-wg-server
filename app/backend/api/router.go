@@ -52,7 +52,7 @@ func NewRouter() *http.ServeMux {
 }
 
 // Version is set by main package.
-var Version = "1.1.13"
+var Version = "1.1.20"
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -725,7 +725,9 @@ func getConfig(w http.ResponseWriter, r *http.Request) {
 		historyDays = v
 	}
 	autoStart := "false"
-	if v, ok := all["auto_start"]; ok {
+	if isAutoStartEnabled() {
+		autoStart = "true"
+	} else if v, ok := all["auto_start"]; ok {
 		autoStart = v
 	}
 	flushInterval := "10"
@@ -1193,13 +1195,23 @@ func isMonitorRunning() bool {
 	return true
 }
 
+const daemonServiceName = "wg-server-daemon.service"
+
 func setAutoStart(enabled bool) {
-	serviceName := "wg-server.service"
 	if enabled {
-		exec.Command("systemctl", "enable", serviceName).Run()
+		exec.Command("systemctl", "enable", daemonServiceName).Run()
 	} else {
-		exec.Command("systemctl", "disable", serviceName).Run()
+		exec.Command("systemctl", "disable", daemonServiceName).Run()
 	}
+}
+
+// isAutoStartEnabled 查询 systemd 实际是否启用开机自启
+func isAutoStartEnabled() bool {
+	out, err := exec.Command("systemctl", "is-enabled", daemonServiceName).Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "enabled"
 }
 
 func handleUserConfig(w http.ResponseWriter, r *http.Request, userID int) {

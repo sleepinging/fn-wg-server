@@ -1,24 +1,32 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import * as api from '../api'
+
+const PAGE_SIZE = 10
 
 const HistoryTable: React.FC<{ uid: number }> = ({ uid }) => {
   const [history, setHistory] = useState<any[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    loadHistory()
-  }, [uid, page])
-
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
+    setLoading(true)
     try {
-      const data = await api.getUserHistory(uid, page, 20)
+      const data = await api.getUserHistory(uid, page, PAGE_SIZE)
       setHistory(data.history || data.data || [])
       setTotal(data.total || 0)
     } catch (e) {
       console.error('Failed to load history', e)
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [uid, page])
+
+  useEffect(() => {
+    loadHistory()
+  }, [loadHistory])
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div>
@@ -34,7 +42,10 @@ const HistoryTable: React.FC<{ uid: number }> = ({ uid }) => {
           </tr>
         </thead>
         <tbody>
-          {(history || []).map((h: any) => (
+          {loading && (
+            <tr><td colSpan={6} className="empty">加载中...</td></tr>
+          )}
+          {!loading && (history || []).map((h: any) => (
             <tr key={h.id}>
               <td>{h.internalIP}</td>
               <td className="ip">{h.externalIP}</td>
@@ -44,18 +55,16 @@ const HistoryTable: React.FC<{ uid: number }> = ({ uid }) => {
               <td>{formatBytesSimple(h.txBytes)}</td>
             </tr>
           ))}
-          {(history || []).length === 0 && (
+          {!loading && (history || []).length === 0 && (
             <tr><td colSpan={6} className="empty">暂无历史记录</td></tr>
           )}
         </tbody>
       </table>
-      {total > 20 && (
-        <div className="pagination">
-          <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</button>
-          <span>第 {page} 页 / 共 {Math.ceil(total / 20)} 页</span>
-          <button className="btn btn-sm" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>下一页</button>
-        </div>
-      )}
+      <div className="pagination">
+        <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</button>
+        <span>第 {page} 页 / 共 {totalPages} 页 (共{total}条)</span>
+        <button className="btn btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>下一页</button>
+      </div>
     </div>
   )
 }

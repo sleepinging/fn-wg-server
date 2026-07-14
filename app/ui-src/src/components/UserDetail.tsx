@@ -3,6 +3,7 @@ import { getUser, getUserStats, getUserTraffic, getUserConfig, User } from '../a
 import HistoryTable from './HistoryTable'
 import BandwidthChart from './BandwidthChart'
 import DebugBar from './DebugBar'
+import { downsampleMax } from './downsample'
 
 interface Props {
   userId: number
@@ -29,11 +30,15 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         getUserStats(userId),
       ])
 
+      const rangeMs = getRangeMs(timeRange)
+      const now = Date.now()
+
       if (firstLoad.current) {
         firstLoad.current = false
-        const startMs = getStartTime(timeRange)
+        const startMs = now - rangeMs
         setChartLoading(true)
         try {
+          // 首次全量：后端聚合到 100 点
           const t = await getUserTraffic(userId, startMs, 0)
           setTraffic(t)
           if (t?.chart?.length > 0) {
@@ -42,42 +47,34 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
           if (chartBuf.current.length === 0) {
             chartBuf.current = [{ ts: startMs, rxSpeed: 0, txSpeed: 0, rxBytes: 0, txBytes: 0 }]
           }
-          setDomain([startMs, Date.now()])
+          setDomain([startMs, now])
         } finally {
           setChartLoading(false)
         }
       } else {
+        // 增量拉取：只取最新点之后的少量原始点
         const latest = chartBuf.current.length > 0
           ? chartBuf.current[chartBuf.current.length - 1].ts
           : 0
         if (latest > 0) {
           const t = await getUserTraffic(userId, latest, 0)
-          // 总流量每次刷新都更新（之前只在首次加载设置，导致永远不刷新）
           setTraffic(t)
           if (t?.chart?.length > 0) {
-            const seen = new Set(chartBuf.current.map((p: any) => p.ts))
-            let newCount = 0
             for (const p of t.chart) {
-              if (!seen.has(p.ts)) {
+              if (p.ts > latest) {
                 chartBuf.current.push(p)
-                seen.add(p.ts)
-                newCount++
               }
             }
-            // 滑动窗口：仅保留最近 100 个点（不再做复杂重采样）
-            if (chartBuf.current.length > 100) {
-              chartBuf.current = chartBuf.current.slice(-100)
-            }
-            // 按时间范围裁剪：丢弃超出当前选择范围的旧点
-            const rangeMs = getRangeMs(timeRange)
-            const cutoff = Date.now() - rangeMs
-            while (chartBuf.current.length > 1 && chartBuf.current[0].ts < cutoff) {
-              chartBuf.current.shift()
-            }
-            void newCount
           }
         }
-        setDomain([Date.now() - getRangeMs(timeRange), Date.now()])
+        // 按时间范围裁剪：丢弃超出范围的旧点，保持跨度稳定
+        const cutoff = now - rangeMs
+        chartBuf.current = chartBuf.current.filter(p => p.ts >= cutoff)
+        // 点数累积够后本地合并到 100 点（max 算法，与后端一致）
+        if (chartBuf.current.length > 120) {
+          chartBuf.current = downsampleMax(chartBuf.current, 100)
+        }
+        setDomain([now - rangeMs, now])
       }
       // state 更新放在 chartBuf 之后，确保渲染时数据已最新
       setUser(u)
@@ -160,14 +157,6 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
 
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-label">内部IP</div>
-          <div className="stat-value ip">{user.internalIP}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">外部IP</div>
-          <div className="stat-value ip">{stats?.endpoint || '-'}</div>
-        </div>
-        <div className="stat-card">
           <div className="stat-label">下载速度</div>
           <div className="stat-value">{stats ? formatSpeed(stats.txSpeed) : '-'}</div>
         </div>
@@ -182,6 +171,14 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         <div className="stat-card">
           <div className="stat-label">本次上传</div>
           <div className="stat-value">{stats ? formatBytes(stats.sessionRxBytes || 0) : '-'}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">内部IP</div>
+          <div className="stat-value ip">{user.internalIP}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">外部IP</div>
+          <div className="stat-value ip">{stats?.endpoint || '-'}</div>
         </div>
       </div>
 
