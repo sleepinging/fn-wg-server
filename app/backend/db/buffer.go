@@ -204,9 +204,14 @@ func CountBufferedAfter(userID int, sinceMs int64) int {
 	writeMu.Lock()
 	defer writeMu.Unlock()
 	count := 0
-	for _, p := range pointBuf {
-		if (userID == 0 || p.UserID == userID) && p.GoTs > sinceMs {
-			count++
+	// 用 SQLite 时间作为 buffer 点的时间戳（Go 的时钟不可靠）
+	dbTs := getDBTimestamp()
+	for i, p := range pointBuf {
+		if p.UserID == userID {
+			ts := dbTs - int64(len(pointBuf)-1-i)*1000
+			if ts > sinceMs {
+				count++
+			}
 		}
 	}
 	return count
@@ -219,13 +224,15 @@ func GetBufferedPointsAfter(userID int, sinceMs int64) []BandwidthPoint {
 	// 用 SQLite 时间作为 buffer 点的时间戳（Go 的时钟不可靠）
 	dbTs := getDBTimestamp()
 	for i, p := range pointBuf {
-		if (userID == 0 || p.UserID == userID) && p.GoTs > sinceMs {
+		if p.UserID == userID {
 			// 倒推时间：最新的 buffer 点 = dbTs，之前每个点 -1 秒
 			ts := dbTs - int64(len(pointBuf)-1-i)*1000
-			result = append(result, BandwidthPoint{
-				Ts: ts, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
-				RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed,
-			})
+			if ts > sinceMs {
+				result = append(result, BandwidthPoint{
+					Ts: ts, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
+					RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed,
+				})
+			}
 		}
 	}
 	return result

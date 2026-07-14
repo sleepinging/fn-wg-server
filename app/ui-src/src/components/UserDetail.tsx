@@ -52,6 +52,8 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
           : 0
         if (latest > 0) {
           const t = await getUserTraffic(userId, latest, 0)
+          // 总流量每次刷新都更新（之前只在首次加载设置，导致永远不刷新）
+          setTraffic(t)
           if (t?.chart?.length > 0) {
             const seen = new Set(chartBuf.current.map((p: any) => p.ts))
             let newCount = 0
@@ -62,18 +64,17 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
                 newCount++
               }
             }
-            // 累积后重采样到100个均匀点
-            if (chartBuf.current.length > 100 && newCount > 0) {
-              if (chartBuf.current.length > 100) {
-                const step = (chartBuf.current.length - 1) / 99
-                const resampled = []
-                for (let i = 0; i < 100; i++) {
-                  const idx = Math.round(i * step)
-                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)])
-                }
-                chartBuf.current = resampled
-              }
+            // 滑动窗口：仅保留最近 100 个点（不再做复杂重采样）
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100)
             }
+            // 按时间范围裁剪：丢弃超出当前选择范围的旧点
+            const rangeMs = getRangeMs(timeRange)
+            const cutoff = Date.now() - rangeMs
+            while (chartBuf.current.length > 1 && chartBuf.current[0].ts < cutoff) {
+              chartBuf.current.shift()
+            }
+            void newCount
           }
         }
         setDomain([Date.now() - getRangeMs(timeRange), Date.now()])
@@ -110,8 +111,6 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k))
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
-
-  const [renderKey, setRenderKey] = useState(0)
 
   const chartData = chartBuf.current.map((p: any) => ({
     ts: p.ts,
@@ -170,19 +169,19 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         </div>
         <div className="stat-card">
           <div className="stat-label">下载速度</div>
-          <div className="stat-value">{stats ? formatSpeed(stats.rxSpeed) : '-'}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">上传速度</div>
           <div className="stat-value">{stats ? formatSpeed(stats.txSpeed) : '-'}</div>
         </div>
         <div className="stat-card">
+          <div className="stat-label">上传速度</div>
+          <div className="stat-value">{stats ? formatSpeed(stats.rxSpeed) : '-'}</div>
+        </div>
+        <div className="stat-card">
           <div className="stat-label">本次下载</div>
-          <div className="stat-value">{stats ? formatBytes(stats.sessionRxBytes || 0) : '-'}</div>
+          <div className="stat-value">{stats ? formatBytes(stats.sessionTxBytes || 0) : '-'}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">本次上传</div>
-          <div className="stat-value">{stats ? formatBytes(stats.sessionTxBytes || 0) : '-'}</div>
+          <div className="stat-value">{stats ? formatBytes(stats.sessionRxBytes || 0) : '-'}</div>
         </div>
       </div>
 
@@ -233,13 +232,12 @@ const UserDetail: React.FC<Props> = ({ userId, onBack }) => {
         timeRange={timeRange}
         onIntervalChange={setIntervalSec}
         onTimeRangeChange={setTimeRange}
-        line1Key="rxSpeed"
-        line2Key="txSpeed"
+        line1Key="txSpeed"
+        line2Key="rxSpeed"
         formatSpeed={formatSpeed}
-        renderKey={renderKey}
         extraContent={
           <div className="total-traffic">
-            总下载: {formatBytes(traffic?.totalRx || 0)} | 总上传: {formatBytes(traffic?.totalTx || 0)}
+            总下载: {formatBytes(traffic?.totalTx || 0)} | 总上传: {formatBytes(traffic?.totalRx || 0)}
           </div>
         }
       />

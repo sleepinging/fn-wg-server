@@ -177,8 +177,8 @@ const Users: React.FC<Props> = ({ onViewUser }) => {
                 <span className={`status-dot ${user.online ? 'online' : 'offline'}`} />
                 {user.online ? '在线' : '离线'}
               </td>
-              <td>{formatSpeed(user.rxSpeed || 0)}</td>
               <td>{formatSpeed(user.txSpeed || 0)}</td>
+              <td>{formatSpeed(user.rxSpeed || 0)}</td>
               <td>{new Date(user.createdAt).toLocaleString()}</td>
               <td className="actions">
                 <button className="btn btn-sm" onClick={() => onViewUser(user.id)}>详情</button>

@@ -15,7 +15,6 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   const [dbStats, setDbStats] = useState<any>(null)
   const [chartLoading, setChartLoading] = useState(false)
   const chartBuf = useRef<any[]>([])
-  const newBuf = useRef<any[]>([])  // 增量缓冲，积累够再合并
   const [domain, setDomain] = useState<[number,number]>([Date.now() - 3600000, Date.now()])
   const firstLoad = useRef(true)
   const dbLastFetch = useRef(0)
@@ -57,27 +56,17 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
         if (latest > 0) {
           const pts = await getStatsHistory(0, latest, 0)
           if (pts?.length > 0) {
-            // 新数据先进入缓冲区
+            // 增量去重后立即合并，不做延迟聚合
+            const seen = new Set(chartBuf.current.map((p: any) => p.ts))
             for (const p of pts) {
-              newBuf.current.push(p)
+              if (!seen.has(p.ts)) {
+                chartBuf.current.push(p)
+                seen.add(p.ts)
+              }
             }
-            // 计算旧数据每个点的时间跨度
-            const oldSpan = latest - chartBuf.current[0].ts
-            const spanPerOldPoint = oldSpan / chartBuf.current.length
-            const newBufSpan = newBuf.current[newBuf.current.length - 1].ts - newBuf.current[0].ts
-            // 缓冲区累积够1个旧点的时间跨度后合并一次
-            if (newBufSpan >= spanPerOldPoint) {
-              const maxRx = Math.max(...newBuf.current.map((p: any) => p.rxSpeed || 0))
-              const maxTx = Math.max(...newBuf.current.map((p: any) => p.txSpeed || 0))
-              const totalRx = newBuf.current.reduce((s: number, p: any) => s + (p.rxBytes || 0), 0)
-              const totalTx = newBuf.current.reduce((s: number, p: any) => s + (p.txBytes || 0), 0)
-              chartBuf.current.push({
-                ts: newBuf.current[newBuf.current.length - 1].ts,
-                rxSpeed: maxRx, txSpeed: maxTx,
-                rxBytes: totalRx, txBytes: totalTx,
-              })
-              chartBuf.current = chartBuf.current.slice(1)  // 丢弃最旧1点
-              newBuf.current = []  // 清空缓冲
+            // 滑动窗口：仅保留最近 100 个点
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100)
             }
           }
         }
@@ -95,7 +84,6 @@ const Dashboard: React.FC<Props> = ({ onViewUser }) => {
   useEffect(() => {
     firstLoad.current = true
     chartBuf.current = []
-    newBuf.current = []
     setChartLoading(true)
     loadData().finally(() => setChartLoading(false))
     const timer = setInterval(loadData, intervalSec * 1000)

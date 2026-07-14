@@ -181,10 +181,11 @@ func GetLatestBufferedPoint(userID int) *BandwidthPoint {
 	var latest *BandwidthPoint
 	dbTs := getDBTimestamp()
 	for i, p := range pointBuf {
-		if p.UserID == userID || (userID == 0 && p.UserID == 0) {
+		if p.UserID == userID {
 			// 倒推时间戳，避免用 Go 的错钟
 			ts := dbTs - int64(len(pointBuf)-1-i)*1000
-			if latest == nil || p.GoTs > latest.Ts {
+			// 统一用 DB 倒推出的 ts 比较，不要混用 Go 时钟（GoTs）
+			if latest == nil || ts > latest.Ts {
 				latest = &BandwidthPoint{Ts: ts, RxBytes: p.RxBytes, TxBytes: p.TxBytes, RxSpeed: p.RxSpeed, TxSpeed: p.TxSpeed}
 			}
 		}
@@ -193,7 +194,12 @@ func GetLatestBufferedPoint(userID int) *BandwidthPoint {
 }
 
 // GetUserTotalTraffic gets total traffic for a user across all sessions.
+// 优先读缓冲区（最新），缓冲区为空时回退到 DB。
 func GetUserTotalTraffic(userID int) (rx int64, tx int64, err error) {
+	if bufLatest := GetLatestBufferedPoint(userID); bufLatest != nil {
+		return bufLatest.RxBytes, bufLatest.TxBytes, nil
+	}
+
 	dbLock.RLock()
 	defer dbLock.RUnlock()
 

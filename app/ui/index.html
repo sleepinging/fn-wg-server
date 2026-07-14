@@ -90973,7 +90973,6 @@ const Dashboard = ({ onViewUser }) => {
   const [dbStats, setDbStats] = reactExports.useState(null);
   const [chartLoading, setChartLoading] = reactExports.useState(false);
   const chartBuf = reactExports.useRef([]);
-  const newBuf = reactExports.useRef([]);
   const [domain, setDomain] = reactExports.useState([Date.now() - 36e5, Date.now()]);
   const firstLoad = reactExports.useRef(true);
   const dbLastFetch = reactExports.useRef(0);
@@ -91009,26 +91008,15 @@ const Dashboard = ({ onViewUser }) => {
         if (latest > 0) {
           const pts = await getStatsHistory(0, latest, 0);
           if ((pts == null ? void 0 : pts.length) > 0) {
+            const seen = new Set(chartBuf.current.map((p2) => p2.ts));
             for (const p2 of pts) {
-              newBuf.current.push(p2);
+              if (!seen.has(p2.ts)) {
+                chartBuf.current.push(p2);
+                seen.add(p2.ts);
+              }
             }
-            const oldSpan = latest - chartBuf.current[0].ts;
-            const spanPerOldPoint = oldSpan / chartBuf.current.length;
-            const newBufSpan = newBuf.current[newBuf.current.length - 1].ts - newBuf.current[0].ts;
-            if (newBufSpan >= spanPerOldPoint) {
-              const maxRx = Math.max(...newBuf.current.map((p2) => p2.rxSpeed || 0));
-              const maxTx = Math.max(...newBuf.current.map((p2) => p2.txSpeed || 0));
-              const totalRx = newBuf.current.reduce((s2, p2) => s2 + (p2.rxBytes || 0), 0);
-              const totalTx = newBuf.current.reduce((s2, p2) => s2 + (p2.txBytes || 0), 0);
-              chartBuf.current.push({
-                ts: newBuf.current[newBuf.current.length - 1].ts,
-                rxSpeed: maxRx,
-                txSpeed: maxTx,
-                rxBytes: totalRx,
-                txBytes: totalTx
-              });
-              chartBuf.current = chartBuf.current.slice(1);
-              newBuf.current = [];
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100);
             }
           }
         }
@@ -91043,7 +91031,6 @@ const Dashboard = ({ onViewUser }) => {
   reactExports.useEffect(() => {
     firstLoad.current = true;
     chartBuf.current = [];
-    newBuf.current = [];
     setChartLoading(true);
     loadData().finally(() => setChartLoading(false));
     const timer = setInterval(loadData, intervalSec * 1e3);
@@ -91364,8 +91351,8 @@ const Users = ({ onViewUser }) => {
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-dot ${user.online ? "online" : "offline"}` }),
             user.online ? "在线" : "离线"
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatSpeed(user.rxSpeed || 0) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatSpeed(user.txSpeed || 0) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatSpeed(user.rxSpeed || 0) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: new Date(user.createdAt).toLocaleString() }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "actions", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-sm", onClick: () => onViewUser(user.id), children: "详情" }),
@@ -91476,6 +91463,7 @@ const UserDetail = ({ userId, onBack }) => {
         const latest = chartBuf.current.length > 0 ? chartBuf.current[chartBuf.current.length - 1].ts : 0;
         if (latest > 0) {
           const t2 = await getUserTraffic(userId, latest, 0);
+          setTraffic(t2);
           if (((_b3 = t2 == null ? void 0 : t2.chart) == null ? void 0 : _b3.length) > 0) {
             const seen = new Set(chartBuf.current.map((p2) => p2.ts));
             let newCount = 0;
@@ -91486,16 +91474,13 @@ const UserDetail = ({ userId, onBack }) => {
                 newCount++;
               }
             }
-            if (chartBuf.current.length > 100 && newCount > 0) {
-              if (chartBuf.current.length > 100) {
-                const step = (chartBuf.current.length - 1) / 99;
-                const resampled = [];
-                for (let i = 0; i < 100; i++) {
-                  const idx = Math.round(i * step);
-                  resampled.push(chartBuf.current[Math.min(idx, chartBuf.current.length - 1)]);
-                }
-                chartBuf.current = resampled;
-              }
+            if (chartBuf.current.length > 100) {
+              chartBuf.current = chartBuf.current.slice(-100);
+            }
+            const rangeMs = getRangeMs(timeRange);
+            const cutoff = Date.now() - rangeMs;
+            while (chartBuf.current.length > 1 && chartBuf.current[0].ts < cutoff) {
+              chartBuf.current.shift();
             }
           }
         }
@@ -91529,7 +91514,6 @@ const UserDetail = ({ userId, onBack }) => {
     const i = Math.floor(Math.log(bps) / Math.log(k));
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
-  const [renderKey2, setRenderKey] = reactExports.useState(0);
   const chartData = chartBuf.current.map((p2) => ({
     ts: p2.ts,
     time: new Date(p2.ts).toLocaleTimeString(),
@@ -91584,19 +91568,19 @@ const UserDetail = ({ userId, onBack }) => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "下载速度" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatSpeed(stats.rxSpeed) : "-" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "上传速度" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatSpeed(stats.txSpeed) : "-" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "上传速度" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatSpeed(stats.rxSpeed) : "-" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "本次下载" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatBytes2(stats.sessionRxBytes || 0) : "-" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatBytes2(stats.sessionTxBytes || 0) : "-" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stat-card", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-label", children: "本次上传" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatBytes2(stats.sessionTxBytes || 0) : "-" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "stat-value", children: stats ? formatBytes2(stats.sessionRxBytes || 0) : "-" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "info-grid", children: [
@@ -91648,15 +91632,14 @@ const UserDetail = ({ userId, onBack }) => {
         timeRange,
         onIntervalChange: setIntervalSec,
         onTimeRangeChange: setTimeRange,
-        line1Key: "rxSpeed",
-        line2Key: "txSpeed",
+        line1Key: "txSpeed",
+        line2Key: "rxSpeed",
         formatSpeed,
-        renderKey: renderKey2,
         extraContent: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "total-traffic", children: [
           "总下载: ",
-          formatBytes2((traffic == null ? void 0 : traffic.totalRx) || 0),
+          formatBytes2((traffic == null ? void 0 : traffic.totalTx) || 0),
           " | 总上传: ",
-          formatBytes2((traffic == null ? void 0 : traffic.totalTx) || 0)
+          formatBytes2((traffic == null ? void 0 : traffic.totalRx) || 0)
         ] })
       }
     ),
