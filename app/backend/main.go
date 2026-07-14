@@ -27,7 +27,7 @@ func init() {
 	}
 }
 
-const Version = "1.1.20"
+const Version = "1.1.22"
 
 
 

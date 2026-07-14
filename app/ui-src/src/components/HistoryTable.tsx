@@ -51,8 +51,8 @@ const HistoryTable: React.FC<{ uid: number }> = ({ uid }) => {
               <td className="ip">{h.externalIP}</td>
               <td>{h.connectedAt ? new Date(h.connectedAt).toLocaleString() : '-'}</td>
               <td>{h.disconnectedAt ? new Date(h.disconnectedAt).toLocaleString() : '在线中'}</td>
-              <td>{formatBytesSimple(h.rxBytes)}</td>
               <td>{formatBytesSimple(h.txBytes)}</td>
+              <td>{formatBytesSimple(h.rxBytes)}</td>
             </tr>
           ))}
           {!loading && (history || []).length === 0 && (

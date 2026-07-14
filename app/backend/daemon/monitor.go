@@ -105,6 +105,13 @@ func (m *Monitor) collectLoop() {
 
 	m.syncConfig()
 
+	// 收尾上次未正常断开的连接记录（进程被杀/重启后遗留的僵尸会话）
+	if n, err := db.CloseAllStaleSessions(); err != nil {
+		log.Printf("CloseAllStaleSessions error: %v", err)
+	} else if n > 0 {
+		log.Printf("Closed %d stale connection session(s) on startup", n)
+	}
+
 	for {
 		select {
 		case <-m.stopCh:

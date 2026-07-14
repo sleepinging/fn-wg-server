@@ -91428,8 +91428,8 @@ const HistoryTable = ({ uid }) => {
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "ip", children: h.externalIP }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: h.connectedAt ? new Date(h.connectedAt).toLocaleString() : "-" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: h.disconnectedAt ? new Date(h.disconnectedAt).toLocaleString() : "在线中" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytesSimple(h.rxBytes) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytesSimple(h.txBytes) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytesSimple(h.txBytes) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatBytesSimple(h.rxBytes) })
         ] }, h.id)),
         !loading && (history || []).length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 6, className: "empty", children: "暂无历史记录" }) })
       ] })

@@ -235,11 +235,32 @@ func GetUserHistory(userID int, page, pageSize int) ([]map[string]interface{}, i
 	return history, total, nil
 }
 
+// CloseAllStaleSessions 关闭所有未正常断开的连接记录（守护进程重启时收尾）。
+// 返回关闭的会话数量。
+func CloseAllStaleSessions() (int64, error) {
+	FlushBuffer()
+	dbLock.RLock()
+	defer dbLock.RUnlock()
+
+	result, err := db.Exec(`UPDATE connection_log SET disconnected_at = ?
+		WHERE disconnected_at IS NULL`, time.Now().UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // RecordConnection logs a connection event (one-shot, flushes buffer first).
+// 会先关闭该用户之前未正常断开的连接（防止僵尸会话）。
 func RecordConnection(userID int, username, internalIP, externalIP string) error {
 	FlushBuffer()
 	dbLock.RLock()
 	defer dbLock.RUnlock()
+
+	// 关闭该用户之前未正常断开的连接（进程被杀/重启后收尾）
+	db.Exec(`UPDATE connection_log SET disconnected_at = ?
+		WHERE user_id = ? AND disconnected_at IS NULL`,
+		time.Now().UnixMilli(), userID)
 
 	_, err := db.Exec(`INSERT INTO connection_log 
 		(user_id, username, internal_ip, external_ip, connected_at)
